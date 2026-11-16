@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ICT_ChecklistApp: App {
@@ -11,5 +12,14 @@ struct ICT_ChecklistApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [
+            TradingCycle.self,
+            KeyLevel.self,
+            ScenarioRecord.self,
+            Trade.self,
+            TradeShot.self,
+            RiskLadderState.self,
+            AppSettings.self
+        ])
     }
 }

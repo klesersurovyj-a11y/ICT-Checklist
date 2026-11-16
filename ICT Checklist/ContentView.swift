@@ -4,23 +4,39 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "checkmark.seal.fill")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-                .font(.title)
-                .padding()
-            Text("Hello, world!")
-                .font(.title)
-                .padding()
+        TabView {
+            TodayView()
+                .tabItem { Label("Сегодня", systemImage: "checklist") }
+            TradesView()
+                .tabItem { Label("Сделки", systemImage: "list.bullet.rectangle") }
+            RiskLadderView()
+                .tabItem { Label("Ladder", systemImage: "stairs") }
+            StatisticsView()
+                .tabItem { Label("Статистика", systemImage: "chart.bar.xaxis") }
+            CalendarView()
+                .tabItem { Label("Календарь", systemImage: "calendar") }
         }
-        .padding()
+        .tint(Theme.blue)
+        .preferredColorScheme(.dark)
     }
 }
 
 #Preview {
     ContentView()
+        .modelContainer(
+            for: [
+                TradingCycle.self,
+                KeyLevel.self,
+                ScenarioRecord.self,
+                Trade.self,
+                TradeShot.self,
+                RiskLadderState.self,
+                AppSettings.self
+            ],
+            inMemory: true
+        )
 }
