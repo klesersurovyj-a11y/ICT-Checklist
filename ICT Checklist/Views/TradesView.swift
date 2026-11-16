@@ -26,12 +26,15 @@ struct TradesView: View {
 
     private enum TradesCover: Identifiable {
         case gallery(Trade)
+        case trade(Trade)
         case newTrade
 
         var id: String {
             switch self {
             case .gallery(let trade):
                 return "gallery-\(trade.persistentModelID.hashValue)"
+            case .trade(let trade):
+                return "trade-\(trade.persistentModelID.hashValue)"
             case .newTrade:
                 return "new-trade"
             }
@@ -45,16 +48,10 @@ struct TradesView: View {
     @State private var selectedTags: Set<String> = []
 
     private enum TradesSheet: Identifiable {
-        case close(Trade)
-        case tags(Trade)
         case filters
 
         var id: String {
             switch self {
-            case .close(let trade):
-                return "close-\(trade.persistentModelID.hashValue)"
-            case .tags(let trade):
-                return "tags-\(trade.persistentModelID.hashValue)"
             case .filters:
                 return "filters"
             }
@@ -197,18 +194,6 @@ struct TradesView: View {
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
-            case .close(let trade):
-                TradeCloseSheet(trade: trade, usedTags: usedTags)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(.ultraThinMaterial)
-                    .presentationCornerRadius(32)
-            case .tags(let trade):
-                TradeTagsSheet(trade: trade, usedTags: usedTags)
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
-                    .presentationBackground(.ultraThinMaterial)
-                    .presentationCornerRadius(32)
             case .filters:
                 TradeFiltersSheet(
                     symbols: symbols,
@@ -232,6 +217,8 @@ struct TradesView: View {
             switch cover {
             case .gallery(let trade):
                 ScreenshotsGallery(trade: trade)
+            case .trade(let trade):
+                TradeDetailView(trade: trade, usedTags: usedTags)
             case .newTrade:
                 NewTradeView()
             }
@@ -461,19 +448,21 @@ struct TradesView: View {
 
     // MARK: - Cards
 
-    @ViewBuilder
     private func card(for trade: Trade) -> some View {
-        if trade.result == .open {
-            Button {
-                activeSheet = .close(trade)
-                Haptics.tap()
-            } label: {
-                openCard(trade)
+        Button {
+            activeCover = .trade(trade)
+            Haptics.tap()
+        } label: {
+            Group {
+                if trade.result == .open {
+                    openCard(trade)
+                } else {
+                    closedCard(trade)
+                }
             }
-            .buttonStyle(.plain)
-        } else {
-            closedCard(trade)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     private func openCard(_ trade: Trade) -> some View {
@@ -516,7 +505,7 @@ struct TradesView: View {
             }
 
             if !trade.shots.isEmpty {
-                shotsRow(trade, interactive: trade.result != .open)
+                shotsPreview(trade.sortedShots)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -547,17 +536,6 @@ struct TradesView: View {
                 resultPill(trade)
                 TradePill(text: Fmt.money(trade.riskUSD), tint: Theme.blue, emphasized: true)
                 Spacer(minLength: 0)
-                Button {
-                    activeSheet = .tags(trade)
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "tag")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(Color.white.opacity(0.06)))
-                }
-                .buttonStyle(.plain)
                 Text(Fmt.shortDay(trade.tradingDay))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.textTertiary)
@@ -568,7 +546,7 @@ struct TradesView: View {
             }
 
             if !trade.shots.isEmpty {
-                shotsRow(trade, interactive: trade.result != .open)
+                shotsPreview(trade.sortedShots)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -596,12 +574,10 @@ struct TradesView: View {
         }
     }
 
-    @ViewBuilder
-    private func shotsRow(_ trade: Trade, interactive: Bool) -> some View {
-        let shots = trade.sortedShots
-        let content = HStack(spacing: 6) {
+    private func shotsPreview(_ shots: [TradeShot]) -> some View {
+        HStack(spacing: 6) {
             ForEach(shots.prefix(3)) { shot in
-                ShotThumbnail(fileName: shot.fileName, size: 44)
+                ShotThumbnail(shot: shot, size: 44)
             }
             if shots.count > 3 {
                 Text("+\(shots.count - 3)")
@@ -609,18 +585,6 @@ struct TradesView: View {
                     .foregroundStyle(Theme.textTertiary)
             }
             Spacer(minLength: 0)
-        }
-
-        if interactive {
-            Button {
-                activeCover = .gallery(trade)
-                Haptics.tap()
-            } label: {
-                content
-            }
-            .buttonStyle(.plain)
-        } else {
-            content
         }
     }
 

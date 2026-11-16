@@ -8,7 +8,7 @@ import SwiftData
 import UIKit
 
 struct ShotThumbnail: View {
-    let fileName: String
+    let shot: TradeShot
     var size: CGFloat = 56
 
     @State private var image: UIImage?
@@ -33,15 +33,14 @@ struct ShotThumbnail: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         )
-        .task(id: fileName) {
-            guard image == nil else { return }
-            image = UIImage(contentsOfFile: ScreenshotStore.url(for: fileName).path(percentEncoded: false))
+        .task(id: shot.imageData?.count) {
+            image = ScreenshotStore.image(for: shot)
         }
     }
 }
 
 struct ShotImage: View {
-    let fileName: String
+    let shot: TradeShot
     var maxHeight: CGFloat = 420
 
     @State private var image: UIImage?
@@ -69,9 +68,8 @@ struct ShotImage: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
         )
-        .task(id: fileName) {
-            guard image == nil else { return }
-            image = UIImage(contentsOfFile: ScreenshotStore.url(for: fileName).path(percentEncoded: false))
+        .task(id: shot.imageData?.count) {
+            image = ScreenshotStore.image(for: shot)
         }
     }
 }
@@ -115,7 +113,7 @@ struct ScreenshotsGallery: View {
                         } else {
                             ForEach(trade.sortedShots) { shot in
                                 VStack(spacing: 8) {
-                                    ShotImage(fileName: shot.fileName)
+                                    ShotImage(shot: shot)
                                     Button {
                                         delete(shot)
                                     } label: {

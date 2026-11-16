@@ -62,6 +62,8 @@ struct StatsSummary {
     var bySymbol: [StatsGroup] = []
     var byDirection: [StatsGroup] = []
     var byStep: [StatsGroup] = []
+    var byWeekday: [StatsGroup] = []
+    var byHour: [StatsGroup] = []
     var byTag: [StatsGroup] = []
 }
 
@@ -82,6 +84,10 @@ enum BreakdownKind: Hashable {
     case symbol(String)
     case direction(Direction)
     case step(Int)
+    /// 0 — понедельник … 6 — воскресенье.
+    case weekday(Int)
+    /// Час входа в сделку: 19 — 19:00 … 20 — 20:00.
+    case hour(Int)
     case tag(String)
 
     func matches(_ trade: Trade) -> Bool {
@@ -92,6 +98,10 @@ enum BreakdownKind: Hashable {
             return trade.direction == value
         case .step(let value):
             return trade.ladderStepIndex == value
+        case .weekday(let value):
+            return StatsEngine.weekdayIndex(for: trade) == value
+        case .hour(let value):
+            return StatsEngine.entryHour(for: trade) == value
         case .tag(let value):
             return trade.tags.contains { $0.caseInsensitiveCompare(value) == .orderedSame }
         }
@@ -99,6 +109,29 @@ enum BreakdownKind: Hashable {
 }
 
 enum StatsEngine {
+    /// Short names of the weekdays, Monday first.
+    static let weekdayTitles = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
+    /// Full names of the weekdays, Monday first.
+    static let weekdayNames = [
+        "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"
+    ]
+
+    /// 0 — понедельник … 6 — воскресенье.
+    static func weekdayIndex(for date: Date, calendar: Calendar = .current) -> Int {
+        // Calendar считает дни недели от воскресенья.
+        let weekday = calendar.component(.weekday, from: date)
+        return (weekday + 5) % 7
+    }
+
+    static func weekdayIndex(for trade: Trade, calendar: Calendar = .current) -> Int {
+        weekdayIndex(for: closeDate(trade), calendar: calendar)
+    }
+
+    /// Час, в который была открыта сделка.
+    static func entryHour(for trade: Trade, calendar: Calendar = .current) -> Int {
+        calendar.component(.hour, from: trade.entryDate)
+    }
+
     static func summary(trades: [Trade], amounts: [Double], period: StatsPeriod) -> StatsSummary {
         var result = StatsSummary()
         let calendar = Calendar.current
@@ -114,6 +147,8 @@ enum StatsEngine {
         guard !closed.isEmpty else {
             result.byDirection = directionGroups(from: closed)
             result.byStep = stepGroups(from: closed, amounts: amounts)
+            result.byWeekday = weekdayGroups(from: closed)
+            result.byHour = hourGroups(from: closed)
             return result
         }
 
@@ -174,6 +209,8 @@ enum StatsEngine {
         result.bySymbol = symbolGroups(from: closed)
         result.byDirection = directionGroups(from: closed)
         result.byStep = stepGroups(from: closed, amounts: amounts)
+        result.byWeekday = weekdayGroups(from: closed)
+        result.byHour = hourGroups(from: closed)
         result.byTag = tagGroups(from: closed)
 
         return result
@@ -240,6 +277,21 @@ enum StatsEngine {
             let items = trades.filter { $0.ladderStepIndex == index }
             let amount = index < amounts.count ? amounts[index] : 0
             return makeGroup(id: "step-\(index)", title: Fmt.money(amount), trades: items)
+        }
+    }
+
+    private static func weekdayGroups(from trades: [Trade]) -> [StatsGroup] {
+        (0..<weekdayTitles.count).map { index in
+            let items = trades.filter { weekdayIndex(for: $0) == index }
+            return makeGroup(id: "weekday-\(index)", title: weekdayTitles[index], trades: items)
+        }
+    }
+
+    private static func hourGroups(from trades: [Trade]) -> [StatsGroup] {
+        let hours = Set(trades.map { entryHour(for: $0) }).sorted()
+        return hours.map { hour in
+            let items = trades.filter { entryHour(for: $0) == hour }
+            return makeGroup(id: "hour-\(hour)", title: Fmt.clock(hour: hour, minute: 0), trades: items)
         }
     }
 

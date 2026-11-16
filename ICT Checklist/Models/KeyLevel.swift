@@ -8,12 +8,12 @@ import SwiftData
 
 @Model
 final class KeyLevel {
-    var typeRaw: String
-    var price: Double
-    var note: String
-    var absorbed: Bool
-    var isWorking: Bool
-    var createdAt: Date
+    var typeRaw: String = KeyLevelType.snr.rawValue
+    var price: Double = 0
+    var note: String = ""
+    var absorbed: Bool = false
+    var isWorking: Bool = false
+    var createdAt: Date = Date()
     var cycle: TradingCycle?
 
     init(type: KeyLevelType,

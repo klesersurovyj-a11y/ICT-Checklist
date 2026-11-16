@@ -8,18 +8,24 @@ import SwiftData
 
 @Model
 final class AppSettings {
-    var symbolsRaw: String
-    var minRR: Double
-    var ladder1: Double
-    var ladder2: Double
-    var ladder3: Double
-    var cycleStartHour: Int
+    var symbolsRaw: String = "EURUSD,GBPUSD,XAUUSD"
+    var minRR: Double = 2.0
+    var ladder1: Double = 12
+    var ladder2: Double = 25
+    var ladder3: Double = 50
+    var cycleStartHour: Int = 19
     var cycleStartMinute: Int = 0
-    var cycleEndHour: Int
+    var cycleEndHour: Int = 22
     var cycleEndMinute: Int = 0
 
     var reminderStartEnabled: Bool = false
     var reminderEndEnabled: Bool = false
+
+    /// Daily limits: once reached, no new entries until the next cycle.
+    var dailyLimitsEnabled: Bool = false
+    /// Maximum loss for a trading day, stored as a positive number of R.
+    var maxDailyLossR: Double = 2
+    var maxTradesPerDay: Int = 2
 
     init(symbolsRaw: String = "EURUSD,GBPUSD,XAUUSD",
          minRR: Double = 2.0,

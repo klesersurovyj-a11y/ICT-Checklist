@@ -5,6 +5,8 @@
 
 import SwiftUI
 import SwiftData
+import CoreData
+import UniformTypeIdentifiers
 
 enum TimeSlot: String, Identifiable {
     case start
@@ -60,6 +62,13 @@ private struct SettingsContent: View {
     @State private var renameTarget = ""
     @State private var renameText = ""
 
+    @State private var showBackupImporter = false
+    @State private var showBackupAlert = false
+    @State private var backupAlertTitle = ""
+    @State private var backupAlertMessage = ""
+
+    @StateObject private var sync = SyncStatus.shared
+
     private var canDeleteSymbol: Bool {
         settings.symbols.count > 1
     }
@@ -73,7 +82,10 @@ private struct SettingsContent: View {
                 reminderCard
                 ladderCard
                 dealCard
+                dailyLimitsCard
                 dataCard
+                backupCard
+                syncCard
                 footer
             }
             .padding(.horizontal, 20)
@@ -112,11 +124,54 @@ private struct SettingsContent: View {
         } message: {
             Text("Разрешите уведомления для приложения в настройках iOS: Настройки → ICT Checklist → Уведомления.")
         }
-        .task { rescheduleExistingReminders() }
+        .alert(backupAlertTitle, isPresented: $showBackupAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(backupAlertMessage)
+        }
+        .fileImporter(
+            isPresented: $showBackupImporter,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    restoreBackup(from: url)
+                }
+            case .failure:
+                showBackupAlert(
+                    title: "Не удалось открыть файл",
+                    message: "Выберите JSON-файл резервной копии ICT Checklist."
+                )
+                Haptics.warning()
+            }
+        }
+        .task {
+            rescheduleExistingReminders()
+            sync.start()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSPersistentCloudKitContainer.eventChangedNotification
+            )
+        ) { notification in
+            sync.handle(notification)
+        }
         .onChange(of: settings.cycleStartHour) { _, _ in rescheduleExistingReminders() }
         .onChange(of: settings.cycleStartMinute) { _, _ in rescheduleExistingReminders() }
         .onChange(of: settings.cycleEndHour) { _, _ in rescheduleExistingReminders() }
         .onChange(of: settings.cycleEndMinute) { _, _ in rescheduleExistingReminders() }
+        .onChange(of: settings.ladder1) { _, _ in refreshWidgetSnapshot() }
+        .onChange(of: settings.ladder2) { _, _ in refreshWidgetSnapshot() }
+        .onChange(of: settings.ladder3) { _, _ in refreshWidgetSnapshot() }
+        .onChange(of: settings.dailyLimitsEnabled) { _, _ in refreshWidgetSnapshot() }
+        .onChange(of: settings.maxDailyLossR) { _, _ in refreshWidgetSnapshot() }
+        .onChange(of: settings.maxTradesPerDay) { _, _ in refreshWidgetSnapshot() }
+    }
+
+    private func refreshWidgetSnapshot() {
+        LadderEngine.sync(context: context)
     }
 
     // MARK: - Header
@@ -422,6 +477,98 @@ private struct SettingsContent: View {
         }
     }
 
+    // MARK: - Daily limits
+
+    private var dailyLimitsCard: some View {
+        settingsCard("ЛИМИТЫ ДНЯ") {
+            VStack(spacing: 0) {
+                ToggleRow(
+                    title: "Включить лимиты",
+                    subtitle: "Новых входов нет, пока не начнётся следующий цикл",
+                    isOn: $settings.dailyLimitsEnabled
+                )
+
+                if settings.dailyLimitsEnabled {
+                    Divider()
+                        .overlay(Color.white.opacity(0.06))
+                        .padding(.vertical, 8)
+
+                    HStack(spacing: 8) {
+                        Text("Максимальный убыток")
+                            .font(.system(size: 17))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        CompactNumberField(
+                            value: $settings.maxDailyLossR,
+                            prefix: "\u{2212}",
+                            range: 0.5...10,
+                            digits: 1,
+                            fieldWidth: 118
+                        )
+                    }
+                    .padding(.vertical, 9)
+
+                    Divider()
+                        .overlay(Color.white.opacity(0.06))
+
+                    maxTradesRow
+
+                    Text("Достигнутый лимит блокирует новые входы до старта следующего цикла. Открытые позиции не затрагиваются.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 10)
+                }
+            }
+        }
+    }
+
+    private var maxTradesRow: some View {
+        HStack(spacing: 8) {
+            Text("Сделок за день")
+                .font(.system(size: 17))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            HStack(spacing: 14) {
+                Button {
+                    settings.maxTradesPerDay = max(settings.maxTradesPerDay - 1, 1)
+                    save()
+                    Haptics.select()
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(settings.maxTradesPerDay <= 1 ? Theme.textTertiary : .white)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                }
+                .buttonStyle(.plain)
+                .disabled(settings.maxTradesPerDay <= 1)
+
+                Text("\(settings.maxTradesPerDay)")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 20)
+
+                Button {
+                    settings.maxTradesPerDay = min(settings.maxTradesPerDay + 1, 10)
+                    save()
+                    Haptics.select()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Theme.accent.opacity(0.22)))
+                }
+                .buttonStyle(.plain)
+                .disabled(settings.maxTradesPerDay >= 10)
+            }
+        }
+        .padding(.vertical, 9)
+    }
+
     // MARK: - Data
 
     private var dataCard: some View {
@@ -460,11 +607,142 @@ private struct SettingsContent: View {
         }
     }
 
+    // MARK: - Backup
+
+    private var backupCard: some View {
+        settingsCard("РЕЗЕРВНАЯ КОПИЯ") {
+            VStack(spacing: 0) {
+                Button {
+                    saveBackup()
+                } label: {
+                    backupRow(icon: "square.and.arrow.up", title: "Сохранить копию")
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+
+                Button {
+                    showBackupImporter = true
+                    Haptics.tap()
+                } label: {
+                    backupRow(icon: "square.and.arrow.down", title: "Восстановить")
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+
+                Text("Один JSON-файл: циклы, ключевые уровни, сделки, метки, скриншоты и настройки. Импорт не удаляет текущие данные и пропускает записи, которые уже есть.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
+            }
+        }
+    }
+
+    private func backupRow(icon: String, title: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+            Text(title)
+                .font(.system(size: 17))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: - Sync
+
+    private var syncCard: some View {
+        settingsCard("СИНХРОНИЗАЦИЯ") {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.14))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: sync.account == .active ? "icloud.fill" : "icloud.slash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(sync.account.tint)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iCloud")
+                            .font(.system(size: 17, weight: .medium))
+                            .foregroundStyle(.white)
+                        Text(sync.account.detail)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    Text(sync.account.title)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(sync.account.tint)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(sync.account.tint.opacity(0.14)))
+                }
+                .padding(.vertical, 12)
+
+                if let date = sync.lastSyncDate {
+                    Divider()
+                        .overlay(Theme.hairline)
+
+                    HStack(spacing: 8) {
+                        Text("Последняя синхронизация")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textSecondary)
+                        Spacer(minLength: 8)
+                        Text(syncMessage(date))
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(sync.lastSyncFailed ? Theme.orange : Theme.textPrimary)
+                    }
+                    .padding(.vertical, 12)
+                }
+
+                Divider()
+                    .overlay(Theme.hairline)
+
+                Text("Циклы, сделки, скриншоты и настройки хранятся в iCloud и на этом устройстве.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
+
+                Text("Локальная база остаётся основной: без сети приложение работает как обычно.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+            }
+        }
+    }
+
+    private func syncMessage(_ date: Date) -> String {
+        let base = "\(Fmt.shortDay(date)), \(Fmt.time(date))"
+        return sync.lastSyncFailed ? base + " · ошибка" : base
+    }
+
     // MARK: - Footer
 
     private var footer: some View {
         VStack(spacing: 4) {
-            Text("Данные хранятся только на этом устройстве")
+            Text("Данные синхронизируются через iCloud")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textTertiary)
             Text("ICT Checklist \(appVersion)")
@@ -545,6 +823,61 @@ private struct SettingsContent: View {
             showExportError = true
             Haptics.warning()
         }
+    }
+
+    private func saveBackup() {
+        do {
+            let url = try BackupStore.writeFile(cycles: cycles, trades: trades, settings: settings)
+            shareItems = [url]
+            showShare = true
+            Haptics.success()
+        } catch {
+            showBackupAlert(
+                title: "Не удалось сохранить копию",
+                message: "Попробуйте ещё раз."
+            )
+            Haptics.warning()
+        }
+    }
+
+    private func restoreBackup(from url: URL) {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let result = try BackupStore.restore(from: data, context: context)
+            LadderEngine.sync(context: context)
+
+            backupAlertTitle = "Копия восстановлена"
+            backupAlertMessage = restoreSummary(result)
+            showBackupAlert = true
+            Haptics.success()
+        } catch {
+            showBackupAlert(
+                title: "Не удалось восстановить",
+                message: "Файл не подходит или повреждён."
+            )
+            Haptics.warning()
+        }
+    }
+
+    private func showBackupAlert(title: String, message: String) {
+        backupAlertTitle = title
+        backupAlertMessage = message
+        showBackupAlert = true
+    }
+
+    private func restoreSummary(_ result: BackupStore.RestoreResult) -> String {
+        var lines = [
+            "Восстановлено: \(Fmt.deals(result.trades)) · \(Fmt.tradingDays(result.cycles))."
+        ]
+        if result.skippedTrades > 0 || result.skippedCycles > 0 {
+            lines.append(
+                "Пропущено как уже существующее: \(Fmt.deals(result.skippedTrades)) · \(Fmt.tradingDays(result.skippedCycles))."
+            )
+        }
+        return lines.joined(separator: "\n")
     }
 }
 

@@ -8,9 +8,9 @@ import SwiftData
 
 @Model
 final class RiskLadderState {
-    var stepIndex: Int
-    var accumulatedR: Double
-    var updatedAt: Date
+    var stepIndex: Int = 0
+    var accumulatedR: Double = 0
+    var updatedAt: Date = Date()
 
     init(stepIndex: Int = 0, accumulatedR: Double = 0) {
         self.stepIndex = stepIndex

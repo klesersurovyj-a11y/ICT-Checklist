@@ -8,24 +8,24 @@ import SwiftData
 
 @Model
 final class Trade {
-    var entryDate: Date
-    var tradingDay: Date
-    var symbol: String
-    var directionRaw: String
-    var ladderStepIndex: Int
-    var riskUSD: Double
-    var entry: Double
-    var originalStop: Double
-    var currentStop: Double
-    var takeProfit: Double
-    var plannedRR: Double
-    var resultRaw: String
-    var actualR: Double
-    var volumeFromB: Bool
-    var isBE: Bool
-    var note: String
+    var entryDate: Date = Date()
+    var tradingDay: Date = Date()
+    var symbol: String = ""
+    var directionRaw: String = Direction.long.rawValue
+    var ladderStepIndex: Int = 0
+    var riskUSD: Double = 0
+    var entry: Double = 0
+    var originalStop: Double = 0
+    var currentStop: Double = 0
+    var takeProfit: Double = 0
+    var plannedRR: Double = 0
+    var resultRaw: String = TradeResult.open.rawValue
+    var actualR: Double = 0
+    var volumeFromB: Bool = false
+    var isBE: Bool = false
+    var note: String = ""
     var tags: [String] = []
-    var closedAt: Date?
+    var closedAt: Date? = nil
 
     @Relationship(deleteRule: .cascade, inverse: \TradeShot.trade)
     var shots: [TradeShot] = []

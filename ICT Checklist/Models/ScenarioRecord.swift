@@ -8,14 +8,14 @@ import SwiftData
 
 @Model
 final class ScenarioRecord {
-    var pointAPrice: Double
-    var pointADepth: Double
-    var pointBPrice: Double?
-    var pointBTypeRaw: String
-    var pointAValid: Bool
-    var pointBValid: Bool
-    var isCurrent: Bool
-    var createdAt: Date
+    var pointAPrice: Double = 0
+    var pointADepth: Double = 0
+    var pointBPrice: Double? = nil
+    var pointBTypeRaw: String = PointBType.fractal.rawValue
+    var pointAValid: Bool = true
+    var pointBValid: Bool = true
+    var isCurrent: Bool = false
+    var createdAt: Date = Date()
     var cycle: TradingCycle?
 
     init(pointAPrice: Double,

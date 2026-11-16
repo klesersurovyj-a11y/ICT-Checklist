@@ -116,7 +116,7 @@ struct TradeTagEditor: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(trade.sortedShots) { shot in
-                        ShotThumbnail(fileName: shot.fileName, size: 58)
+                        ShotThumbnail(shot: shot, size: 58)
                             .contextMenu {
                                 Button("Удалить", role: .destructive) {
                                     removeShot(shot)
@@ -148,7 +148,7 @@ struct TradeTagEditor: View {
             }
 
             if trade.shots.isEmpty {
-                Text("Прикрепите снимок терминала — он хранится только на этом устройстве.")
+                Text("Прикрепите снимок терминала — он синхронизируется через iCloud.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -161,19 +161,18 @@ struct TradeTagEditor: View {
     }
 
     private func importShots(_ items: [PhotosPickerItem]) async {
-        var names: [String] = []
+        var images: [Data] = []
         for item in items {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let name = try? ScreenshotStore.save(data: data) {
-                names.append(name)
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                images.append(data)
             }
         }
-        guard !names.isEmpty else {
+        guard !images.isEmpty else {
             pickedItems = []
             return
         }
-        for name in names {
-            let shot = TradeShot(fileName: name)
+        for data in images {
+            let shot = TradeShot(imageData: data)
             context.insert(shot)
             trade.shots.append(shot)
         }

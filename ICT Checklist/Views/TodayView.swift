@@ -21,6 +21,7 @@ struct TodayView: View {
     @State private var didBootstrap = false
     @State private var navDirection: Int = 1
     @State private var showSettings = false
+    @State private var showLevels = false
 
     private var settings: AppSettings? { settingsList.first }
     private var ladder: RiskLadderState? { ladderList.first }
@@ -63,6 +64,9 @@ struct TodayView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(isPresented: $showLevels) {
+            LevelsView()
+        }
         .task { bootstrap() }
     }
 
@@ -81,6 +85,8 @@ struct TodayView: View {
                     }
                     if let cycle = todayCycle, cycle.stopDay {
                         stopDayBanner(cycle)
+                    } else if dailyLimitReached {
+                        dailyLimitBanner
                     }
                     content
                 }
@@ -105,20 +111,36 @@ struct TodayView: View {
                 Text(headerSubtitle)
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.textSecondary)
+                dailyLimitBadge
             }
             Spacer(minLength: 4)
-            Button {
-                showSettings = true
-                Haptics.tap()
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+            HStack(spacing: 8) {
+                Button {
+                    showLevels = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "square.stack.3d.up")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showSettings = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -186,6 +208,90 @@ struct TodayView: View {
         trades
             .filter { $0.closedAt.map { Calendar.current.isDateInToday($0) } ?? false }
             .reduce(0) { $0 + $1.actualR }
+    }
+
+    // MARK: - Daily limits
+
+    private var limitsEnabled: Bool { settings?.dailyLimitsEnabled ?? false }
+
+    private var maxDailyLossR: Double { max(settings?.maxDailyLossR ?? 2, 0.5) }
+
+    private var maxTradesPerDay: Int { max(settings?.maxTradesPerDay ?? 2, 1) }
+
+    private var todayTrades: [Trade] {
+        trades.filter { Calendar.current.isDateInToday($0.tradingDay) }
+    }
+
+    private var todayLimitR: Double {
+        todayTrades
+            .filter { $0.result != .open }
+            .reduce(0) { $0 + $1.actualR }
+    }
+
+    private var dailyLimitReached: Bool {
+        guard limitsEnabled else { return false }
+        if todayTrades.count >= maxTradesPerDay { return true }
+        return todayLimitR <= -maxDailyLossR + 0.0001
+    }
+
+    private var dailyLimitTint: Color {
+        if dailyLimitReached { return Theme.red }
+        let tradesLeft = maxTradesPerDay - todayTrades.count
+        let rLeft = maxDailyLossR + todayLimitR
+        if tradesLeft <= 1 || rLeft <= 1 { return Theme.orange }
+        return Theme.green
+    }
+
+    private var dailyLimitText: String {
+        "Сделок \(todayTrades.count)/\(maxTradesPerDay) · \(Fmt.r(todayLimitR)) / \(Fmt.r(-maxDailyLossR))"
+    }
+
+    @ViewBuilder
+    private var dailyLimitBadge: some View {
+        if limitsEnabled {
+            Text(dailyLimitText)
+                .font(.system(size: 11.5, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(dailyLimitTint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(dailyLimitTint.opacity(0.14)))
+                .overlay(Capsule().strokeBorder(dailyLimitTint.opacity(0.4), lineWidth: 1))
+                .padding(.top, 2)
+        }
+    }
+
+    @ViewBuilder
+    private var dailyLimitBanner: some View {
+        if dailyLimitReached {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "hand.raised.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(Theme.orange)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("ЛИМИТ ДНЯ")
+                        .font(.system(size: 12, weight: .bold))
+                        .tracking(1.4)
+                        .foregroundStyle(Theme.orange)
+                    Text("Лимит дня · новых входов нет. Следующий цикл в \(cycleStartText).")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Theme.orange.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(Theme.orange.opacity(0.35), lineWidth: 1)
+            )
+        }
     }
 
     private var overviewCard: some View {
@@ -558,6 +664,7 @@ struct TodayView: View {
 
     private func canAdvance(_ cycle: TradingCycle) -> Bool {
         if cycle.step == .entry {
+            guard !dailyLimitReached else { return false }
             guard let rr = cycle.computedRR else { return false }
             return rr >= minRR && cycle.pointAValid && cycle.pointBValid
         }
@@ -603,6 +710,11 @@ struct TodayView: View {
                 return "RR не посчитан — проверьте цены"
             }
             return rr >= minRR ? nil : "RR \(Fmt.rr(rr)) ниже минимума \(Fmt.rr(minRR)) — входа нет"
+        case .entry:
+            if dailyLimitReached {
+                return "Лимит дня · новых входов нет до следующего цикла в \(cycleStartText)"
+            }
+            return nil
         default:
             return nil
         }
@@ -751,7 +863,7 @@ struct TodayView: View {
     }
 
     private func openTrade(_ cycle: TradingCycle) {
-        guard !cycle.stopDay else {
+        guard !cycle.stopDay, !dailyLimitReached else {
             Haptics.warning()
             return
         }

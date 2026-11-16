@@ -8,23 +8,23 @@ import SwiftData
 
 @Model
 final class TradingCycle {
-    var day: Date
-    var createdAt: Date
-    var updatedAt: Date
-    var stepRaw: Int
+    var day: Date = Date()
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    var stepRaw: Int = CycleStep.news.rawValue
 
-    var newsEUR: Bool
-    var newsGBP: Bool
-    var newsUSD: Bool
-    var newsNote: String
+    var newsEUR: Bool = false
+    var newsGBP: Bool = false
+    var newsUSD: Bool = false
+    var newsNote: String = ""
 
-    var ladderStepIndex: Int
-    var riskUSD: Double
-    var accumulatedR: Double
+    var ladderStepIndex: Int = 0
+    var riskUSD: Double = 12
+    var accumulatedR: Double = 0
 
-    var directionRaw: String
-    var trendTypeRaw: String
-    var trendNote: String
+    var directionRaw: String = Direction.long.rawValue
+    var trendTypeRaw: String = TrendType.of_.rawValue
+    var trendNote: String = ""
 
     var drHigh: Double?
     var drLow: Double?
@@ -33,28 +33,28 @@ final class TradingCycle {
     @Relationship(deleteRule: .cascade, inverse: \KeyLevel.cycle)
     var keyLevels: [KeyLevel] = []
 
-    var aConditionSNR: Bool
-    var aConditionOF: Bool
-    var aConditionFractal: Bool
+    var aConditionSNR: Bool = false
+    var aConditionOF: Bool = false
+    var aConditionFractal: Bool = false
 
     var pointAPrice: Double?
     var pointADepth: Double?
-    var pointANote: String
-    var pointAValid: Bool
+    var pointANote: String = ""
+    var pointAValid: Bool = true
 
     var pointBPrice: Double?
-    var pointBTypeRaw: String
-    var pointBNote: String
-    var pointBValid: Bool
+    var pointBTypeRaw: String = PointBType.fractal.rawValue
+    var pointBNote: String = ""
+    var pointBValid: Bool = true
 
-    var symbol: String
+    var symbol: String = "EURUSD"
 
     var entryPrice: Double?
     var stopPrice: Double?
     var takeProfit: Double?
 
-    var confirmationsRaw: String
-    var resultRaw: String
+    var confirmationsRaw: String = ""
+    var resultRaw: String = CycleResult.draft.rawValue
     var stopDay: Bool = false
     var tpVolumeAnswered: Bool = false
     var tpVolumeGiven: Bool = false

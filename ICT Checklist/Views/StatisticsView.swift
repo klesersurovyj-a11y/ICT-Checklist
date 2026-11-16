@@ -14,6 +14,7 @@ struct StatisticsView: View {
     @State private var period: StatsPeriod = .all
     @State private var breakdownTarget: BreakdownTarget?
     @State private var showReport = false
+    @State private var showGoal = false
 
     private var settings: AppSettings? { settingsList.first }
     private var amounts: [Double] {
@@ -63,6 +64,19 @@ struct StatisticsView: View {
                         breakdownSection("По ступеням риска", summary.byStep) { group in
                             .step(summary.byStep.firstIndex(where: { $0.id == group.id }) ?? 0)
                         }
+                        breakdownSection(
+                            "По дням недели",
+                            summary.byWeekday,
+                            kindFor: { group in
+                                .weekday(weekdayIndex(of: group))
+                            },
+                            detailTitleFor: { group in
+                                StatsEngine.weekdayNames[weekdayIndex(of: group)]
+                            }
+                        )
+                        breakdownSection("По времени входа", summary.byHour) { group in
+                            .hour(entryHour(of: group))
+                        }
                         if !summary.byTag.isEmpty {
                             breakdownSection("По меткам", summary.byTag) { group in
                                 .tag(group.title)
@@ -81,6 +95,9 @@ struct StatisticsView: View {
         .fullScreenCover(isPresented: $showReport) {
             ReportView()
         }
+        .fullScreenCover(isPresented: $showGoal) {
+            GoalView()
+        }
     }
 
     // MARK: - Header
@@ -92,18 +109,33 @@ struct StatisticsView: View {
                 ScreenTitle(text: "Статистика")
             }
             Spacer(minLength: 4)
-            Button {
-                showReport = true
-                Haptics.tap()
-            } label: {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
-                    .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+            HStack(spacing: 8) {
+                Button {
+                    showGoal = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "target")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showReport = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -211,7 +243,8 @@ struct StatisticsView: View {
     private func breakdownSection(
         _ title: String,
         _ groups: [StatsGroup],
-        kindFor: @escaping (StatsGroup) -> BreakdownKind
+        kindFor: @escaping (StatsGroup) -> BreakdownKind,
+        detailTitleFor: ((StatsGroup) -> String)? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
@@ -225,18 +258,22 @@ struct StatisticsView: View {
                             .overlay(Color.white.opacity(0.06))
                             .padding(.leading, 16)
                     }
-                    breakdownRow(group, kind: kindFor(group))
+                    breakdownRow(
+                        group,
+                        kind: kindFor(group),
+                        detailTitle: detailTitleFor?(group) ?? group.title
+                    )
                 }
             }
             .glassCard(cornerRadius: 22)
         }
     }
 
-    private func breakdownRow(_ group: StatsGroup, kind: BreakdownKind) -> some View {
+    private func breakdownRow(_ group: StatsGroup, kind: BreakdownKind, detailTitle: String) -> some View {
         Button {
             breakdownTarget = BreakdownTarget(
                 id: group.id,
-                title: group.title,
+                title: detailTitle,
                 kind: kind
             )
             Haptics.tap()
@@ -308,6 +345,14 @@ struct StatisticsView: View {
         if value > 0.05 { return Theme.green }
         if value < -0.05 { return Theme.red }
         return Theme.textSecondary
+    }
+
+    private func weekdayIndex(of group: StatsGroup) -> Int {
+        summary.byWeekday.firstIndex(where: { $0.id == group.id }) ?? 0
+    }
+
+    private func entryHour(of group: StatsGroup) -> Int {
+        Int(group.title.prefix(2)) ?? 0
     }
 
     // MARK: - Charts

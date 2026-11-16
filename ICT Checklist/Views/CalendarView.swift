@@ -405,7 +405,7 @@ struct CalendarView: View {
     }
 
     private var footer: some View {
-        Text("Данные хранятся только на этом устройстве")
+        Text("Данные синхронизируются через iCloud")
             .font(.system(size: 12))
             .foregroundStyle(Theme.textTertiary)
             .frame(maxWidth: .infinity)

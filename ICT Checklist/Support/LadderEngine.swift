@@ -113,6 +113,8 @@ enum LadderEngine {
             try? context.save()
         }
 
+        WidgetSnapshot.refresh(context: context)
+
         return snapshot
     }
 

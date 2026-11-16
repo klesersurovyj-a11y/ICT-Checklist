@@ -12,14 +12,45 @@ struct ICT_ChecklistApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [
-            TradingCycle.self,
-            KeyLevel.self,
-            ScenarioRecord.self,
-            Trade.self,
-            TradeShot.self,
-            RiskLadderState.self,
-            AppSettings.self
-        ])
+        .modelContainer(AppContainer.shared)
     }
+}
+
+/// The app's single store. It is mirrored to iCloud when that is available,
+/// and always stays usable from the local database when it is not.
+enum AppContainer {
+    static let schema = Schema([
+        TradingCycle.self,
+        KeyLevel.self,
+        ScenarioRecord.self,
+        Trade.self,
+        TradeShot.self,
+        RiskLadderState.self,
+        AppSettings.self,
+        MonthlyGoal.self
+    ])
+
+    static let shared: ModelContainer = {
+        let cloudConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .automatic
+        )
+
+        if let container = try? ModelContainer(for: schema, configurations: [cloudConfiguration]) {
+            return container
+        }
+
+        let localConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            cloudKitDatabase: .none
+        )
+
+        do {
+            return try ModelContainer(for: schema, configurations: [localConfiguration])
+        } catch {
+            fatalError("Не удалось создать локальное хранилище: \(error)")
+        }
+    }()
 }

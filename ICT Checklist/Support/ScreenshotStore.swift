@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import UIKit
 
 enum ScreenshotStore {
     static func directory() -> URL {
@@ -25,6 +26,17 @@ enum ScreenshotStore {
     }
 
     static func delete(_ fileName: String) {
+        guard !fileName.isEmpty else { return }
         try? FileManager.default.removeItem(at: url(for: fileName))
+    }
+
+    /// New screenshots live in SwiftData (and sync through iCloud);
+    /// screenshots taken before that change are still files on disk.
+    static func image(for shot: TradeShot) -> UIImage? {
+        if let data = shot.imageData, let image = UIImage(data: data) {
+            return image
+        }
+        guard !shot.fileName.isEmpty else { return nil }
+        return UIImage(contentsOfFile: url(for: shot.fileName).path(percentEncoded: false))
     }
 }
