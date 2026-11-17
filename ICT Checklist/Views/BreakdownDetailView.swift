@@ -45,8 +45,11 @@ struct BreakdownDetailView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     backButton
+                        .reveal(.slideLeft)
                     header
+                        .reveal(.drop)
                     tiles
+                        .reveal(.zoom, 1)
 
                     if groupTrades.isEmpty {
                         emptyCard

@@ -27,6 +27,26 @@ final class AppSettings {
     var maxDailyLossR: Double = 2
     var maxTradesPerDay: Int = 2
 
+    /// Автозакрытие позиций по TP/SL по рыночной цене.
+    var autoCloseEnabled: Bool = false
+
+    /// Напоминать, когда суммарный R месяца доходит до цели.
+    var goalReminderEnabled: Bool = false
+    /// Месяц и цель, о которых уже сообщили, — чтобы не повторять.
+    var goalNoticeKey: String = ""
+    /// Напоминать заполнить дневник после закрытия терминала.
+    var journalReminderEnabled: Bool = false
+
+    /// Напоминать про план новой недели в воскресенье.
+    var weekPlanReminderEnabled: Bool = false
+
+    /// Напоминать, когда сработал дневной лимит.
+    var dailyLimitReminderEnabled: Bool = false
+    /// Торговый день, о лимите которого уже сообщили, — чтобы не повторять.
+    var dailyLimitNoticeKey: String = ""
+    /// Скрытые плитки «Разбора недели»: идентификаторы через запятую.
+    var hiddenReviewTilesRaw: String = ""
+
     init(symbolsRaw: String = "EURUSD,GBPUSD,XAUUSD",
          minRR: Double = 2.0,
          ladder1: Double = 12,

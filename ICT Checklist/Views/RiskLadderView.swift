@@ -40,10 +40,15 @@ struct RiskLadderView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                        .reveal(.slideLeft)
                     heroCard
+                        .reveal(.zoom, 1)
                     ladder
+                        .reveal(.tilt, 2)
                     howItWorks
+                        .reveal(.rise, 3)
                     history
+                        .reveal(.rise, 4)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)

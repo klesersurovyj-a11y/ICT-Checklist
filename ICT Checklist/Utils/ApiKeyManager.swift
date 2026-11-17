@@ -42,6 +42,29 @@ class ApiKeyManager {
         }
         return "ICT-Checklist"
     }
+
+    /// Имена, которыми мог быть зашифрован файл ключей: имя приложения
+    /// (с пробелом), имя из bundle id и запасной вариант.
+    private var projectCandidates: [String] {
+        var names: [String] = []
+
+        if let display = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String,
+           !display.isEmpty {
+            names.append(display)
+        }
+        if let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String,
+           !name.isEmpty {
+            names.append(name)
+        }
+        names.append(projectName)
+        names.append("ICT Checklist")
+
+        var unique: [String] = []
+        for name in names where !unique.contains(name) {
+            unique.append(name)
+        }
+        return unique
+    }
     
     // MARK: - Public Methods
     
@@ -50,6 +73,11 @@ class ApiKeyManager {
     /// - Returns: The API key value, or nil if not found
     func get(key: String) -> String? {
         print("calling get")
+        return keychainValue(key: key) ?? decryptFromBundle(key: key)
+    }
+
+    /// Читает значение из связки ключей.
+    private func keychainValue(key: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -57,17 +85,42 @@ class ApiKeyManager {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-        
+
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        
+
         if status == errSecSuccess,
            let data = result as? Data,
            let string = String(data: data, encoding: .utf8) {
             return string
         }
-        
+
         return nil
+    }
+
+    /// Если ключа нет в связке ключей, расшифровывает его из бандла
+    /// и сразу сохраняет — так ключ переживает повторную установку приложения.
+    private func decryptFromBundle(key: String) -> String? {
+        guard let path = Bundle.main.path(forResource: "ENCRYPTED_KEYS", ofType: "plist"),
+              let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let plist = try? PropertyListSerialization.propertyList(
+                from: data,
+                options: [],
+                format: nil
+              ) as? [String: Any],
+              let encrypted = plist[key] as? String else {
+            return nil
+        }
+
+        let value = projectCandidates
+            .lazy
+            .compactMap { self.decryptValue(encrypted, projectName: $0) }
+            .first
+
+        if let value {
+            _ = save(key: key, value: value)
+        }
+        return value
     }
     
     /// Check if an API key exists in Keychain
@@ -141,7 +194,12 @@ class ApiKeyManager {
             print("ApiKeyManager: Encrypted string length: \(encryptedString.count)")
             print("ApiKeyManager: Decrypting key '\(key)'...")
             
-            guard let decryptedValue = decryptValue(encryptedString, projectName: projectName) else {
+            let decryptedValue = projectCandidates
+                .lazy
+                .compactMap { self.decryptValue(encryptedString, projectName: $0) }
+                .first
+
+            guard let decryptedValue else {
                 print("ApiKeyManager: Failed to decrypt key '\(key)'")
                 continue
             }

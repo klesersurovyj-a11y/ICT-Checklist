@@ -10,9 +10,9 @@ import SwiftUI
 struct PressableButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.965 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
     }
 }
 
@@ -26,24 +26,19 @@ struct PrimaryButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.background)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
+            .padding(.vertical, 13)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isEnabled ? Theme.accent : Theme.accent.opacity(0.28))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isEnabled ? Theme.accent : Theme.accent.opacity(0.25))
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.white.opacity(isEnabled ? 0.14 : 0.05), lineWidth: 1)
-            )
-            .shadow(color: Theme.accent.opacity(isEnabled ? 0.35 : 0), radius: 14, x: 0, y: 8)
         }
         .buttonStyle(PressableButtonStyle())
         .disabled(!isEnabled)
@@ -57,17 +52,17 @@ struct SecondaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, 12)
                 .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.06))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.8)
                 )
         }
         .buttonStyle(PressableButtonStyle())
@@ -92,12 +87,12 @@ struct GlassSegmented<Option: Hashable>: View {
         }
         .padding(3)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.04))
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(Color.white.opacity(0.045))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.8)
         )
     }
 
@@ -105,19 +100,19 @@ struct GlassSegmented<Option: Hashable>: View {
         let isSelected = option == selection
         return Button {
             guard !isSelected else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+            withAnimation(Theme.snappy) {
                 selection = option
             }
             Haptics.select()
         } label: {
             Text(label(option))
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isSelected ? .white : Theme.textSecondary)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? Theme.background : Theme.textSecondary)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
+                .padding(.vertical, 9)
                 .background {
                     if isSelected {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(tint(option))
                             .matchedGeometryEffect(id: "segment", in: namespace)
                     }
@@ -138,18 +133,18 @@ struct Chip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(isSelected ? .white : Theme.textSecondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? Theme.background : Theme.textSecondary)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 6)
                 .background(
-                    Capsule().fill(isSelected ? tint.opacity(0.92) : Color.white.opacity(0.05))
+                    Capsule().fill(isSelected ? tint : Color.white.opacity(0.06))
                 )
                 .overlay(
-                    Capsule().strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.07), lineWidth: 1)
+                    Capsule().strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.07), lineWidth: 0.8)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
     }
 }
 
@@ -263,7 +258,7 @@ struct ToggleRow: View {
                 }
             }
         }
-        .tint(Theme.green)
+        .tint(.white)
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -297,7 +292,7 @@ struct CheckRow: View {
                         .frame(width: 26, height: 26)
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(isOn ? .white : Theme.textTertiary)
+                        .foregroundStyle(isOn ? Theme.background : Theme.textTertiary)
                 }
                 Text(title)
                     .font(.system(size: 13.5, weight: .medium))
@@ -313,7 +308,7 @@ struct CheckRow: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(isOn ? Theme.accent.opacity(0.35) : Color.white.opacity(0.05), lineWidth: 1)
+                    .strokeBorder(isOn ? Theme.accent.opacity(0.45) : Color.white.opacity(0.05), lineWidth: 0.8)
             )
         }
         .buttonStyle(.plain)

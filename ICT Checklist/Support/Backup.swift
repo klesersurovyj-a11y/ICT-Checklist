@@ -24,6 +24,7 @@ struct BackupFile: Codable {
         var dailyLimitsEnabled: Bool
         var maxDailyLossR: Double
         var maxTradesPerDay: Int
+        var autoCloseEnabled: Bool? = nil
 
         init(_ settings: AppSettings) {
             symbolsRaw = settings.symbolsRaw
@@ -40,6 +41,7 @@ struct BackupFile: Codable {
             dailyLimitsEnabled = settings.dailyLimitsEnabled
             maxDailyLossR = settings.maxDailyLossR
             maxTradesPerDay = settings.maxTradesPerDay
+            autoCloseEnabled = settings.autoCloseEnabled
         }
 
         func apply(to settings: AppSettings) {
@@ -57,6 +59,7 @@ struct BackupFile: Codable {
             settings.dailyLimitsEnabled = dailyLimitsEnabled
             settings.maxDailyLossR = maxDailyLossR
             settings.maxTradesPerDay = maxTradesPerDay
+            settings.autoCloseEnabled = autoCloseEnabled ?? settings.autoCloseEnabled
         }
     }
 
@@ -162,6 +165,7 @@ struct BackupFile: Codable {
         var tags: [String]
         var closedAt: Date?
         var cycleDay: Date?
+        var accountKey: String?
         var shots: [ShotItem]
 
         init(_ trade: Trade) {
@@ -184,6 +188,7 @@ struct BackupFile: Codable {
             tags = trade.tags
             closedAt = trade.closedAt
             cycleDay = trade.cycle?.day
+            accountKey = trade.account.map { "\($0.name)|\($0.typeRaw)" }
             shots = trade.shots.map(ShotItem.init)
         }
 
@@ -360,11 +365,292 @@ struct BackupFile: Codable {
         }
     }
 
+    struct AccountRecord: Codable {
+        var name: String
+        var typeRaw: String
+        var currency: String
+        var createdAt: Date
+        var isArchived: Bool
+        var startingBalance: Double? = nil
+        var operations: [OperationRecord]
+
+        init(_ account: TradingAccount) {
+            name = account.name
+            typeRaw = account.typeRaw
+            currency = account.currency
+            createdAt = account.createdAt
+            isArchived = account.isArchived
+            startingBalance = account.startingBalance
+            operations = account.operations.map(OperationRecord.init)
+        }
+
+        func makeModel(context: ModelContext) -> TradingAccount {
+            let account = TradingAccount(
+                name: name,
+                type: AccountType(rawValue: typeRaw) ?? .personal,
+                currency: currency,
+                startingBalance: startingBalance ?? 0
+            )
+            account.createdAt = createdAt
+            account.isArchived = isArchived
+            context.insert(account)
+
+            for record in operations {
+                let operation = record.makeModel()
+                context.insert(operation)
+                account.operations.append(operation)
+            }
+            return account
+        }
+    }
+
+    struct OperationRecord: Codable {
+        var kindRaw: String
+        var amount: Double
+        var date: Date
+        var note: String
+        var createdAt: Date
+        var transferID: String? = nil
+        var isTransferIncoming: Bool? = nil
+
+        init(_ operation: AccountOperation) {
+            kindRaw = operation.kindRaw
+            amount = operation.amount
+            date = operation.date
+            note = operation.note
+            createdAt = operation.createdAt
+            transferID = operation.transferID
+            isTransferIncoming = operation.isTransferIncoming
+        }
+
+        func makeModel() -> AccountOperation {
+            let operation = AccountOperation(
+                kind: AccountOperationKind(rawValue: kindRaw) ?? .payout,
+                amount: amount,
+                date: date,
+                note: note
+            )
+            operation.createdAt = createdAt
+            operation.transferID = transferID ?? ""
+            operation.isTransferIncoming = isTransferIncoming ?? false
+            return operation
+        }
+    }
+
+    struct TradeRef: Codable {
+        var entry: Date
+        var day: Date
+    }
+
+    struct PhotoItem: Codable {
+        var imageData: Data?
+        var createdAt: Date
+
+        init(_ shot: ErrorShot) {
+            imageData = shot.imageData
+            createdAt = shot.createdAt
+        }
+
+        func makeModel() -> ErrorShot {
+            ErrorShot(imageData: imageData, createdAt: createdAt)
+        }
+    }
+
+    struct ErrorNoteRecord: Codable {
+        var title: String
+        var text: String
+        var statusRaw: String
+        var createdAt: Date
+        var updatedAt: Date
+        var trades: [TradeRef]
+        var shots: [PhotoItem]? = nil
+
+        init(_ note: ErrorNote) {
+            title = note.title
+            text = note.text
+            statusRaw = note.statusRaw
+            createdAt = note.createdAt
+            updatedAt = note.updatedAt
+            trades = note.trades.map { TradeRef(entry: $0.entryDate, day: $0.tradingDay) }
+            shots = note.shots.map(PhotoItem.init)
+        }
+
+        func makeModel(context: ModelContext) -> ErrorNote {
+            let note = ErrorNote(
+                title: title,
+                text: text,
+                status: ErrorStatus(rawValue: statusRaw) ?? .awaiting
+            )
+            note.createdAt = createdAt
+            note.updatedAt = updatedAt
+            context.insert(note)
+            return note
+        }
+    }
+
+    struct BrainPhotoItem: Codable {
+        var imageData: Data?
+        var createdAt: Date
+
+        init(_ shot: BrainShot) {
+            imageData = shot.imageData
+            createdAt = shot.createdAt
+        }
+
+        func makeModel() -> BrainShot {
+            BrainShot(imageData: imageData, createdAt: createdAt)
+        }
+    }
+
+    struct BrainNoteRecord: Codable {
+        var kindRaw: String
+        var title: String
+        var topic: String
+        var summary: String
+        var keyRaw: String
+        var benefits: String
+        var schematic: String
+        var chartExamples: String
+        var conclusions: String
+        var createdAt: Date
+        var updatedAt: Date
+        var popularity: Int
+        var trades: [TradeRef]
+        var photos: [BrainPhotoItem]? = nil
+
+        init(_ note: BrainNote) {
+            kindRaw = note.kindRaw
+            title = note.title
+            topic = note.topic
+            summary = note.summary
+            keyRaw = note.keyRaw
+            benefits = note.benefits
+            schematic = note.schematic
+            chartExamples = note.chartExamples
+            conclusions = note.conclusions
+            createdAt = note.createdAt
+            updatedAt = note.updatedAt
+            popularity = note.popularity
+            trades = note.trades.map { TradeRef(entry: $0.entryDate, day: $0.tradingDay) }
+            photos = note.photos.map(BrainPhotoItem.init)
+        }
+
+        func makeModel(context: ModelContext) -> BrainNote {
+            let note = BrainNote(
+                kind: BrainKind(rawValue: kindRaw) ?? .keyNote,
+                title: title,
+                topic: topic
+            )
+            note.summary = summary
+            note.keyRaw = keyRaw
+            note.benefits = benefits
+            note.schematic = schematic
+            note.chartExamples = chartExamples
+            note.conclusions = conclusions
+            note.createdAt = createdAt
+            note.updatedAt = updatedAt
+            note.popularity = popularity
+            context.insert(note)
+            return note
+        }
+    }
+
+    struct JournalRecord: Codable {
+        var day: Date
+        var moodRaw: String
+        var note: String
+        var improve: String
+        var createdAt: Date
+        var updatedAt: Date
+
+        init(_ entry: JournalEntry) {
+            day = entry.day
+            moodRaw = entry.moodRaw
+            note = entry.note
+            improve = entry.improve
+            createdAt = entry.createdAt
+            updatedAt = entry.updatedAt
+        }
+
+        func makeModel(context: ModelContext) -> JournalEntry {
+            let entry = JournalEntry(
+                day: day,
+                mood: JournalMood(rawValue: moodRaw) ?? .calm,
+                note: note,
+                improve: improve
+            )
+            entry.createdAt = createdAt
+            entry.updatedAt = updatedAt
+            context.insert(entry)
+            return entry
+        }
+    }
+
+    struct WeekScenarioRecord: Codable {
+        var title: String
+        var note: String
+        var position: Int
+        var createdAt: Date
+
+        init(_ scenario: WeekScenario) {
+            title = scenario.title
+            note = scenario.note
+            position = scenario.position
+            createdAt = scenario.createdAt
+        }
+
+        func makeModel() -> WeekScenario {
+            let scenario = WeekScenario(title: title, note: note, position: position)
+            scenario.createdAt = createdAt
+            return scenario
+        }
+    }
+
+    struct WeekPlanRecord: Codable {
+        var weekStart: Date
+        var theme: String
+        var targetR: Double
+        var review: String? = nil
+        var createdAt: Date
+        var updatedAt: Date
+        var scenarios: [WeekScenarioRecord]? = nil
+
+        init(_ plan: WeekPlan) {
+            weekStart = plan.weekStart
+            theme = plan.theme
+            targetR = plan.targetR
+            review = plan.review
+            createdAt = plan.createdAt
+            updatedAt = plan.updatedAt
+            scenarios = plan.sortedScenarios.map(WeekScenarioRecord.init)
+        }
+
+        func makeModel(context: ModelContext) -> WeekPlan {
+            let plan = WeekPlan(weekStart: weekStart, theme: theme, targetR: targetR)
+            plan.review = review ?? ""
+            plan.createdAt = createdAt
+            plan.updatedAt = updatedAt
+            context.insert(plan)
+
+            for record in scenarios ?? [] {
+                let scenario = record.makeModel()
+                context.insert(scenario)
+                plan.scenarios.append(scenario)
+            }
+            return plan
+        }
+    }
+
     var version: Int
     var createdAt: Date
     var settings: SettingsRecord?
     var cycles: [CycleRecord]
     var trades: [TradeRecord]
+    var accounts: [AccountRecord]? = nil
+    var errors: [ErrorNoteRecord]? = nil
+    var brainNotes: [BrainNoteRecord]? = nil
+    var journal: [JournalRecord]? = nil
+    var weekPlans: [WeekPlanRecord]? = nil
 }
 
 // MARK: - Store
@@ -378,6 +664,7 @@ enum BackupStore {
     struct RestoreResult {
         var trades: Int = 0
         var cycles: Int = 0
+        var errors: Int = 0
         var skippedTrades: Int = 0
         var skippedCycles: Int = 0
     }
@@ -390,14 +677,24 @@ enum BackupStore {
     static func writeFile(
         cycles: [TradingCycle],
         trades: [Trade],
-        settings: AppSettings?
+        settings: AppSettings?,
+        accounts: [TradingAccount] = [],
+        errors: [ErrorNote] = [],
+        brain: [BrainNote] = [],
+        journal: [JournalEntry] = [],
+        weeks: [WeekPlan] = []
     ) throws -> URL {
         let file = BackupFile(
             version: 1,
             createdAt: .now,
             settings: settings.map(BackupFile.SettingsRecord.init),
             cycles: cycles.map(BackupFile.CycleRecord.init),
-            trades: trades.map(BackupFile.TradeRecord.init)
+            trades: trades.map(BackupFile.TradeRecord.init),
+            accounts: accounts.map(BackupFile.AccountRecord.init),
+            errors: errors.map(BackupFile.ErrorNoteRecord.init),
+            brainNotes: brain.map(BackupFile.BrainNoteRecord.init),
+            journal: journal.map(BackupFile.JournalRecord.init),
+            weekPlans: weeks.map(BackupFile.WeekPlanRecord.init)
         )
 
         let encoder = JSONEncoder()
@@ -425,17 +722,32 @@ enum BackupStore {
         let calendar = Calendar.current
         let existingCycles = (try? context.fetch(FetchDescriptor<TradingCycle>())) ?? []
         let existingTrades = (try? context.fetch(FetchDescriptor<Trade>())) ?? []
+        let existingAccounts = (try? context.fetch(FetchDescriptor<TradingAccount>())) ?? []
+        let existingErrors = (try? context.fetch(FetchDescriptor<ErrorNote>())) ?? []
+        let existingBrainNotes = (try? context.fetch(FetchDescriptor<BrainNote>())) ?? []
+        let existingJournal = (try? context.fetch(FetchDescriptor<JournalEntry>())) ?? []
+        let existingWeekPlans = (try? context.fetch(FetchDescriptor<WeekPlan>())) ?? []
 
         var cycleByDay: [Date: TradingCycle] = [:]
         for cycle in existingCycles {
             cycleByDay[calendar.startOfDay(for: cycle.day)] = cycle
         }
 
-        var tradeKeys = Set(
-            existingTrades.map {
-                TradeKey(entry: $0.entryDate, day: calendar.startOfDay(for: $0.tradingDay))
-            }
-        )
+        var tradeByKey: [TradeKey: Trade] = [:]
+        var tradeKeys = Set<TradeKey>()
+        for trade in existingTrades {
+            let key = TradeKey(
+                entry: trade.entryDate,
+                day: calendar.startOfDay(for: trade.tradingDay)
+            )
+            tradeByKey[key] = trade
+            tradeKeys.insert(key)
+        }
+
+        var accountsByKey: [String: TradingAccount] = [:]
+        for account in existingAccounts {
+            accountsByKey["\(account.name)|\(account.typeRaw)"] = account
+        }
 
         var result = RestoreResult()
 
@@ -448,6 +760,16 @@ enum BackupStore {
                 context.insert(created)
                 record.apply(to: created)
             }
+        }
+
+        // Счета восстанавливаются первыми, чтобы сделки нашли свой счёт.
+        for record in file.accounts ?? [] {
+            let key = "\(record.name)|\(record.typeRaw)"
+            if accountsByKey[key] != nil {
+                continue
+            }
+            let account = record.makeModel(context: context)
+            accountsByKey[key] = account
         }
 
         for record in file.cycles {
@@ -480,12 +802,109 @@ enum BackupStore {
                 cycle.trade = trade
             }
 
+            if let accountKey = record.accountKey,
+               let account = accountsByKey[accountKey] {
+                trade.account = account
+            }
+
             tradeKeys.insert(key)
+            tradeByKey[key] = trade
             result.trades += 1
+        }
+
+        var errorKeys = Set(
+            existingErrors.map { errorKey(title: $0.title, createdAt: $0.createdAt) }
+        )
+        for record in file.errors ?? [] {
+            let key = errorKey(title: record.title, createdAt: record.createdAt)
+            if errorKeys.contains(key) {
+                continue
+            }
+
+            let note = record.makeModel(context: context)
+
+            for ref in record.trades {
+                let tradeKey = TradeKey(
+                    entry: ref.entry,
+                    day: calendar.startOfDay(for: ref.day)
+                )
+                if let trade = tradeByKey[tradeKey] {
+                    note.attach(trade)
+                }
+            }
+
+            for photo in record.shots ?? [] {
+                let shot = photo.makeModel()
+                context.insert(shot)
+                note.shots.append(shot)
+            }
+
+            note.updatedAt = record.updatedAt
+            errorKeys.insert(key)
+            result.errors += 1
+        }
+
+        var brainKeys = Set(
+            existingBrainNotes.map { errorKey(title: $0.title, createdAt: $0.createdAt) }
+        )
+        for record in file.brainNotes ?? [] {
+            let key = errorKey(title: record.title, createdAt: record.createdAt)
+            if brainKeys.contains(key) {
+                continue
+            }
+
+            let note = record.makeModel(context: context)
+
+            for ref in record.trades {
+                let tradeKey = TradeKey(
+                    entry: ref.entry,
+                    day: calendar.startOfDay(for: ref.day)
+                )
+                if let trade = tradeByKey[tradeKey] {
+                    note.attach(trade)
+                }
+            }
+
+            for photo in record.photos ?? [] {
+                let shot = photo.makeModel()
+                context.insert(shot)
+                note.photos.append(shot)
+            }
+
+            note.updatedAt = record.updatedAt
+            brainKeys.insert(key)
+        }
+
+        var journalDays = Set(
+            existingJournal.map { calendar.startOfDay(for: $0.day) }
+        )
+        for record in file.journal ?? [] {
+            let day = calendar.startOfDay(for: record.day)
+            if journalDays.contains(day) {
+                continue
+            }
+            _ = record.makeModel(context: context)
+            journalDays.insert(day)
+        }
+
+        var weekStarts = Set(
+            existingWeekPlans.map { calendar.startOfDay(for: $0.weekStart) }
+        )
+        for record in file.weekPlans ?? [] {
+            let start = calendar.startOfDay(for: record.weekStart)
+            if weekStarts.contains(start) {
+                continue
+            }
+            _ = record.makeModel(context: context)
+            weekStarts.insert(start)
         }
 
         try context.save()
         return result
+    }
+
+    private static func errorKey(title: String, createdAt: Date) -> String {
+        "\(title)|\(createdAt.timeIntervalSince1970)"
     }
 
     private static let stampFormatter: DateFormatter = {

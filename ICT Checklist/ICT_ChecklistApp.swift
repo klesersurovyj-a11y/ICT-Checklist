@@ -29,7 +29,17 @@ enum AppContainer {
         AppSettings.self,
         MonthlyGoal.self,
         TradePlan.self,
-        PlanPhoto.self
+        PlanPhoto.self,
+        TradingAccount.self,
+        AccountOperation.self,
+        LossReview.self,
+        ErrorNote.self,
+        ErrorShot.self,
+        BrainNote.self,
+        BrainShot.self,
+        JournalEntry.self,
+        WeekPlan.self,
+        WeekScenario.self
     ])
 
     static let shared: ModelContainer = {

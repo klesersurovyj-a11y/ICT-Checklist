@@ -87,9 +87,13 @@ struct LevelsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     backButton
+                        .reveal(.slideLeft)
                     header
+                        .reveal(.drop)
                     typeChips
+                        .reveal(.blur, 1)
                     activeToggle
+                        .reveal(.rise, 2)
 
                     if groups.isEmpty {
                         emptyCard

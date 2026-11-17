@@ -140,14 +140,18 @@ struct GoalView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     backButton
+                        .reveal(.slideLeft)
                     header
+                        .reveal(.drop)
                     ring
+                        .reveal(.zoom, 1)
 
                     Text(remainingLine)
                         .font(.system(size: 15))
                         .foregroundStyle(Theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
+                        .reveal(.rise, 2)
 
                     Button {
                         showEditor = true

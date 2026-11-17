@@ -13,13 +13,19 @@ private struct CalendarDay: Identifiable {
     let cycle: TradingCycle?
 }
 
+private struct DayTarget: Identifiable {
+    let day: Date
+
+    var id: Date { day }
+}
+
 struct CalendarView: View {
     @Query private var cycles: [TradingCycle]
     @Query private var settingsList: [AppSettings]
 
     @State private var monthAnchor: Date = CalendarView.monthStart(.now)
     @State private var selectedDate: Date = Calendar.current.startOfDay(for: .now)
-    @State private var detailCycle: TradingCycle?
+    @State private var reviewTarget: DayTarget?
 
     private static let weekdaySymbols = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
 
@@ -89,25 +95,27 @@ struct CalendarView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     header
+                        .reveal(.drop)
                     monthHeader
+                        .reveal(.zoom, 1)
                     gridCard
+                        .reveal(.unfurl, 2)
                     Text("Выбранный день")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(.white)
+                        .reveal(.blur, 3)
                     selectedCard
+                        .reveal(.rise, 4)
                     footer
+                        .reveal(.rise, 5)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .padding(.bottom, 32)
             }
         }
-        .sheet(item: $detailCycle) { cycle in
-            DayDetailSheet(
-                cycle: cycle,
-                cycleStartText: cycleStartText,
-                cycleEndText: cycleEndText
-            )
+        .fullScreenCover(item: $reviewTarget) { target in
+            DayReviewView(day: target.day)
         }
     }
 
@@ -213,6 +221,7 @@ struct CalendarView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 selectedDate = day.date
             }
+            openReview(for: day.date)
             Haptics.select()
         } label: {
             VStack(spacing: 1) {
@@ -294,8 +303,7 @@ struct CalendarView: View {
         let tint = tint(of: cycle)
 
         return Button {
-            guard let cycle else { return }
-            detailCycle = cycle
+            openReview(for: selectedDate)
             Haptics.tap()
         } label: {
             VStack(alignment: .leading, spacing: 10) {
@@ -413,6 +421,10 @@ struct CalendarView: View {
     }
 
     // MARK: - Helpers
+
+    private func openReview(for date: Date) {
+        reviewTarget = DayTarget(day: calendar.startOfDay(for: date))
+    }
 
     private static func monthStart(_ date: Date) -> Date {
         var cal = Calendar.current

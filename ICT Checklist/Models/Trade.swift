@@ -32,6 +32,11 @@ final class Trade {
 
     var cycle: TradingCycle?
     var plan: TradePlan?
+    var account: TradingAccount?
+    var lossReview: LossReview?
+    var similarReviews: [LossReview] = []
+    var errorNotes: [ErrorNote] = []
+    var brainNotes: [BrainNote] = []
 
     init(entryDate: Date = .now,
          tradingDay: Date = .now,
@@ -66,6 +71,11 @@ final class Trade {
         self.shots = []
         self.cycle = nil
         self.plan = nil
+        self.account = nil
+        self.lossReview = nil
+        self.similarReviews = []
+        self.errorNotes = []
+        self.brainNotes = []
     }
 
     var direction: Direction {

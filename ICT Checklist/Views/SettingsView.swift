@@ -49,11 +49,20 @@ private struct SettingsContent: View {
 
     @Query(sort: \Trade.entryDate) private var trades: [Trade]
     @Query(sort: \TradingCycle.day) private var cycles: [TradingCycle]
+    @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
+    @Query private var errorNotes: [ErrorNote]
+    @Query private var brainNotes: [BrainNote]
+    @Query private var journalEntries: [JournalEntry]
+    @Query private var weekPlans: [WeekPlan]
+
+    @State private var showAccounts = false
 
     @State private var shareItems: [URL] = []
     @State private var showShare = false
     @State private var showExportError = false
     @State private var showNotificationsAlert = false
+    @State private var priceProbe: String?
+    @State private var isProbing = false
 
     @State private var editingTime: TimeSlot?
     @State private var showAdd = false
@@ -77,16 +86,31 @@ private struct SettingsContent: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 header
+                    .reveal(.drop)
                 symbolsCard
+                    .reveal(.slideLeft, 1)
                 timeCard
+                    .reveal(.slideLeft, 2)
                 reminderCard
+                    .reveal(.slideLeft, 3)
                 ladderCard
+                    .reveal(.slideLeft, 4)
                 dealCard
+                    .reveal(.slideLeft, 5)
                 dailyLimitsCard
+                    .reveal(.slideLeft, 6)
+                marketCard
+                    .reveal(.slideLeft, 7)
+                accountsCard
+                    .reveal(.slideLeft, 8)
                 dataCard
+                    .reveal(.slideLeft, 9)
                 backupCard
+                    .reveal(.slideLeft, 10)
                 syncCard
+                    .reveal(.blur, 11)
                 footer
+                    .reveal(.rise, 12)
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -113,6 +137,9 @@ private struct SettingsContent: View {
         }
         .sheet(isPresented: $showShare) {
             ShareSheet(items: shareItems)
+        }
+        .fullScreenCover(isPresented: $showAccounts) {
+            AccountsView()
         }
         .alert("Не удалось экспортировать", isPresented: $showExportError) {
             Button("OK", role: .cancel) {}
@@ -343,6 +370,44 @@ private struct SettingsContent: View {
                     subtitle: "\(Fmt.clock(hour: settings.cycleEndHour, minute: settings.cycleEndMinute)) — «Закрыть терминал, перевести в BE»",
                     isOn: endReminderBinding
                 )
+                Divider()
+                    .overlay(Theme.hairline)
+                    .padding(.vertical, 8)
+                ToggleRow(
+                    title: "Напоминать о цели",
+                    subtitle: "Когда суммарный R месяца дойдёт до цели",
+                    isOn: goalReminderBinding
+                )
+                Divider()
+                    .overlay(Theme.hairline)
+                    .padding(.vertical, 8)
+                ToggleRow(
+                    title: "Напомнить про дневник",
+                    subtitle: "Через 15 минут после закрытия терминала, если записи за день нет",
+                    isOn: journalReminderBinding
+                )
+                Divider()
+                    .overlay(Theme.hairline)
+                    .padding(.vertical, 8)
+                ToggleRow(
+                    title: "Напоминать о лимите дня",
+                    subtitle: "Когда достигнут лимит по сделкам или по R",
+                    isOn: dailyLimitReminderBinding
+                )
+                .disabled(!settings.dailyLimitsEnabled)
+                .opacity(settings.dailyLimitsEnabled ? 1 : 0.45)
+                if !settings.dailyLimitsEnabled {
+                    Text("Включите «Лимиты дня», чтобы напоминание работало.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                }
+                ToggleRow(
+                    title: "Напомнить про план недели",
+                    subtitle: "В воскресенье в 18:00, если план новой недели ещё не заполнен",
+                    isOn: weekPlanReminderBinding
+                )
                 Text("Напоминания локальные: работают без сети и не покидают устройство.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
@@ -412,6 +477,119 @@ private struct SettingsContent: View {
         )
     }
 
+    private var goalReminderBinding: Binding<Bool> {
+        Binding(
+            get: { settings.goalReminderEnabled },
+            set: { enabled in
+                if enabled {
+                    Task {
+                        let granted = await ReminderService.requestAuthorization()
+                        if granted {
+                            settings.goalReminderEnabled = true
+                            save()
+                            Haptics.success()
+                        } else {
+                            settings.goalReminderEnabled = false
+                            save()
+                            showNotificationsAlert = true
+                            Haptics.warning()
+                        }
+                    }
+                } else {
+                    settings.goalReminderEnabled = false
+                    save()
+                    Haptics.tap()
+                }
+            }
+        )
+    }
+
+    private var journalReminderBinding: Binding<Bool> {
+        Binding(
+            get: { settings.journalReminderEnabled },
+            set: { enabled in
+                if enabled {
+                    Task {
+                        let granted = await ReminderService.requestAuthorization()
+                        if granted {
+                            settings.journalReminderEnabled = true
+                            save()
+                            JournalReminder.refresh(context: context)
+                            Haptics.success()
+                        } else {
+                            settings.journalReminderEnabled = false
+                            save()
+                            showNotificationsAlert = true
+                            Haptics.warning()
+                        }
+                    }
+                } else {
+                    settings.journalReminderEnabled = false
+                    save()
+                    JournalReminder.refresh(context: context)
+                    Haptics.tap()
+                }
+            }
+        )
+    }
+
+    private var dailyLimitReminderBinding: Binding<Bool> {
+        Binding(
+            get: { settings.dailyLimitReminderEnabled },
+            set: { enabled in
+                guard settings.dailyLimitsEnabled else { return }
+                if enabled {
+                    Task {
+                        let granted = await ReminderService.requestAuthorization()
+                        if granted {
+                            settings.dailyLimitReminderEnabled = true
+                            save()
+                            Haptics.success()
+                        } else {
+                            settings.dailyLimitReminderEnabled = false
+                            save()
+                            showNotificationsAlert = true
+                            Haptics.warning()
+                        }
+                    }
+                } else {
+                    settings.dailyLimitReminderEnabled = false
+                    save()
+                    Haptics.tap()
+                }
+            }
+        )
+    }
+
+    private var weekPlanReminderBinding: Binding<Bool> {
+        Binding(
+            get: { settings.weekPlanReminderEnabled },
+            set: { enabled in
+                if enabled {
+                    Task {
+                        let granted = await ReminderService.requestAuthorization()
+                        if granted {
+                            settings.weekPlanReminderEnabled = true
+                            save()
+                            WeekPlanReminder.refresh(context: context)
+                            Haptics.success()
+                        } else {
+                            settings.weekPlanReminderEnabled = false
+                            save()
+                            showNotificationsAlert = true
+                            Haptics.warning()
+                        }
+                    }
+                } else {
+                    settings.weekPlanReminderEnabled = false
+                    save()
+                    WeekPlanReminder.refresh(context: context)
+                    Haptics.tap()
+                }
+            }
+        )
+    }
+
     private func rescheduleExistingReminders() {
         if settings.reminderStartEnabled {
             ReminderService.scheduleStart(hour: settings.cycleStartHour, minute: settings.cycleStartMinute)
@@ -419,6 +597,7 @@ private struct SettingsContent: View {
         if settings.reminderEndEnabled {
             ReminderService.scheduleEnd(hour: settings.cycleEndHour, minute: settings.cycleEndMinute)
         }
+        JournalReminder.refresh(context: context)
     }
 
     // MARK: - Risk ladder
@@ -567,6 +746,194 @@ private struct SettingsContent: View {
             }
         }
         .padding(.vertical, 9)
+    }
+
+    // MARK: - Market
+
+    private var marketCard: some View {
+        settingsCard("РЫНОК") {
+            VStack(spacing: 0) {
+                ToggleRow(
+                    title: "Закрывать по TP/SL автоматически",
+                    subtitle: "По цене рынка, пока приложение открыто",
+                    isOn: autoCloseBinding
+                )
+
+                Divider()
+                    .overlay(Theme.hairline)
+                    .padding(.vertical, 8)
+
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ключ Twelve Data")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(keyIsSet ? "Добавлен · живые цены доступны" : "Не добавлен · цены недоступны")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(keyIsSet ? Theme.green : Theme.orange)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        probePrice()
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isProbing {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .tint(Theme.background)
+                            }
+                            Text("Проверить")
+                                .font(.system(size: 12.5, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.background)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Theme.accent.opacity(isProbing ? 0.6 : 1)))
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                    .disabled(isProbing)
+                }
+                .padding(.bottom, 8)
+
+                if let priceProbe {
+                    Text(priceProbe)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 8)
+                }
+
+                Divider()
+                    .overlay(Theme.hairline)
+                    .padding(.bottom, 8)
+
+                Text("Цены приходят с Twelve Data по ключу TWELVE_DATA_API_KEY. TradingView не даёт API для приложений, поэтому цена — от этого сервиса. Ручное закрытие по-прежнему работает, автозакрытие можно выключить в любой момент.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var keyIsSet: Bool {
+        ApiKeyManager.shared.has(key: "TWELVE_DATA_API_KEY")
+    }
+
+    private func probePrice() {
+        guard let symbol = settings.symbols.first else { return }
+        isProbing = true
+        priceProbe = nil
+
+        Task {
+            await PriceBook.shared.refresh(symbols: [symbol.uppercased()], force: true)
+            isProbing = false
+
+            if let quote = PriceBook.shared.quote(for: symbol) {
+                priceProbe = "\(symbol) · \(Fmt.price(quote.price)) · обновлено \(Fmt.time(quote.updatedAt))"
+                Haptics.success()
+            } else {
+                priceProbe = PriceBook.shared.lastError ?? "Нет ответа от сервиса цен"
+                Haptics.warning()
+            }
+        }
+    }
+
+    private var autoCloseBinding: Binding<Bool> {
+        Binding(
+            get: { settings.autoCloseEnabled },
+            set: { enabled in
+                if enabled {
+                    Task {
+                        let granted = await ReminderService.requestAuthorization()
+                        settings.autoCloseEnabled = true
+                        save()
+                        if !granted {
+                            showNotificationsAlert = true
+                        }
+                        Haptics.success()
+                    }
+                } else {
+                    settings.autoCloseEnabled = false
+                    save()
+                    Haptics.tap()
+                }
+            }
+        )
+    }
+
+    // MARK: - Accounts
+
+    private var accountsCard: some View {
+        settingsCard("СЧЕТА И ВЫПЛАТЫ") {
+            VStack(spacing: 0) {
+                if accounts.isEmpty {
+                    Text("Добавьте личный счёт, prop-счёт или демо и записывайте выплаты и выводы средств.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 6)
+                } else {
+                    ForEach(accounts) { account in
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(account.name)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                Text(account.type.rawValue + " · " + moneySummary(account))
+                                    .font(.system(size: 11.5))
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            Spacer(minLength: 8)
+                            Text("\(account.operations.count)")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                }
+
+                Button {
+                    showAccounts = true
+                    Haptics.tap()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wallet.pass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                        Text("Открыть счета")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func moneySummary(_ account: TradingAccount) -> String {
+        func value(_ amount: Double) -> String {
+            let formatter = NumberFormatter()
+            formatter.locale = Locale(identifier: "ru_RU")
+            formatter.numberStyle = .decimal
+            formatter.maximumFractionDigits = amount == amount.rounded() ? 0 : 2
+            return formatter.string(from: NSNumber(value: amount)) ?? "0"
+        }
+
+        return "выплаты \(value(account.payoutTotal)) \(account.currency) · выводы \(value(account.withdrawalTotal)) \(account.currency)"
     }
 
     // MARK: - Data
@@ -827,7 +1194,16 @@ private struct SettingsContent: View {
 
     private func saveBackup() {
         do {
-            let url = try BackupStore.writeFile(cycles: cycles, trades: trades, settings: settings)
+            let url = try BackupStore.writeFile(
+                cycles: cycles,
+                trades: trades,
+                settings: settings,
+                accounts: accounts,
+                errors: errorNotes,
+                brain: brainNotes,
+                journal: journalEntries,
+                weeks: weekPlans
+            )
             shareItems = [url]
             showShare = true
             Haptics.success()
@@ -872,6 +1248,9 @@ private struct SettingsContent: View {
         var lines = [
             "Восстановлено: \(Fmt.deals(result.trades)) · \(Fmt.tradingDays(result.cycles))."
         ]
+        if result.errors > 0 {
+            lines.append("Ошибок: \(result.errors).")
+        }
         if result.skippedTrades > 0 || result.skippedCycles > 0 {
             lines.append(
                 "Пропущено как уже существующее: \(Fmt.deals(result.skippedTrades)) · \(Fmt.tradingDays(result.skippedCycles))."

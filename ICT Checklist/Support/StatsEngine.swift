@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftData
 
 enum StatsPeriod: String, CaseIterable, Identifiable {
     case today = "Сегодня"
@@ -41,6 +42,8 @@ struct StatsGroup: Identifiable {
     let losses: Int
     let beCount: Int
     let totalR: Double
+    /// Для разбивки по счетам — счёт, к которому относится группа.
+    var kind: BreakdownKind? = nil
 
     var winRate: Double {
         guard count > 0 else { return 0 }
@@ -89,6 +92,12 @@ enum BreakdownKind: Hashable {
     /// Час входа в сделку: 19 — 19:00 … 20 — 20:00.
     case hour(Int)
     case tag(String)
+    /// Неделя: начало недели (понедельник), диапазон считается внутри.
+    case week(Date)
+    /// Сделки торгового счёта.
+    case account(PersistentIdentifier)
+    /// Сделки, не привязанные ни к одному счёту.
+    case noAccount
 
     func matches(_ trade: Trade) -> Bool {
         switch self {
@@ -104,7 +113,23 @@ enum BreakdownKind: Hashable {
             return StatsEngine.entryHour(for: trade) == value
         case .tag(let value):
             return trade.tags.contains { $0.caseInsensitiveCompare(value) == .orderedSame }
+        case .week(let start):
+            guard let end = Calendar.current.date(byAdding: .day, value: 7, to: start) else {
+                return false
+            }
+            let day = Calendar.current.startOfDay(for: trade.tradingDay)
+            return day >= start && day < end
+        case .account(let id):
+            return trade.account?.persistentModelID == id
+        case .noAccount:
+            return trade.account == nil
         }
+    }
+
+    /// Диапазон недели сам задаёт период, поэтому фильтр «Сегодня / Неделя / Всё» не нужен.
+    var hasOwnRange: Bool {
+        if case .week = self { return true }
+        return false
     }
 }
 
@@ -287,14 +312,60 @@ enum StatsEngine {
     // MARK: - Breakdown details
 
     static func detailTrades(_ trades: [Trade], period: StatsPeriod, kind: BreakdownKind) -> [Trade] {
-        trades
-            .filter { $0.result != .open }
-            .filter { period.contains($0.closedAt ?? $0.entryDate) }
+        let closed = trades.filter { $0.result != .open }
+        let scoped = kind.hasOwnRange
+            ? closed
+            : closed.filter { period.contains($0.closedAt ?? $0.entryDate) }
+
+        return scoped
             .filter { kind.matches($0) }
             .sorted { closeDate($0) > closeDate($1) }
     }
 
     // MARK: - Groups
+
+    /// Разбивка по торговым счетам за выбранный период: счета без закрытых
+    /// сделок не показываются, сделки без счёта собираются в «Без счёта».
+    static func accountGroups(
+        trades: [Trade],
+        accounts: [TradingAccount],
+        period: StatsPeriod
+    ) -> [StatsGroup] {
+        let calendar = Calendar.current
+        let closed = trades
+            .filter { $0.result != .open }
+            .filter { period.contains($0.closedAt ?? $0.entryDate, calendar: calendar) }
+
+        guard !closed.isEmpty else { return [] }
+
+        var groups: [StatsGroup] = []
+
+        for account in accounts {
+            let items = closed.filter { $0.account?.persistentModelID == account.persistentModelID }
+            guard !items.isEmpty else { continue }
+
+            var group = makeGroup(
+                id: "account-\(account.persistentModelID)",
+                title: account.name.isEmpty ? "Счёт без названия" : account.name,
+                trades: items
+            )
+            group.kind = .account(account.persistentModelID)
+            groups.append(group)
+        }
+
+        let withoutAccount = closed.filter { $0.account == nil }
+        if !withoutAccount.isEmpty {
+            var group = makeGroup(id: "account-none", title: "Без счёта", trades: withoutAccount)
+            group.kind = .noAccount
+            groups.append(group)
+        }
+
+        return groups.sorted { first, second in
+            if first.count != second.count { return first.count > second.count }
+            if abs(first.totalR - second.totalR) > 0.0001 { return first.totalR > second.totalR }
+            return first.title.localizedCaseInsensitiveCompare(second.title) == .orderedAscending
+        }
+    }
 
     private static func symbolGroups(from trades: [Trade]) -> [StatsGroup] {
         let grouped = Dictionary(grouping: trades) { $0.symbol }

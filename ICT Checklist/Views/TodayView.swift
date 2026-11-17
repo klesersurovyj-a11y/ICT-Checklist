@@ -23,6 +23,9 @@ struct TodayView: View {
     @State private var navDirection: Int = 1
     @State private var showSettings = false
     @State private var showLevels = false
+    @State private var showSecondBrain = false
+    @State private var showWeekPlan = false
+    @State private var showWeeklyPerformance = false
 
     private var settings: AppSettings? { settingsList.first }
     private var ladder: RiskLadderState? { ladderList.first }
@@ -68,6 +71,15 @@ struct TodayView: View {
         .fullScreenCover(isPresented: $showLevels) {
             LevelsView()
         }
+        .fullScreenCover(isPresented: $showSecondBrain) {
+            SecondBrainView()
+        }
+        .fullScreenCover(isPresented: $showWeekPlan) {
+            WeekPlanView()
+        }
+        .fullScreenCover(isPresented: $showWeeklyPerformance) {
+            WeeklyPerformanceView()
+        }
         .task { bootstrap() }
     }
 
@@ -81,15 +93,24 @@ struct TodayView: View {
                         .frame(height: 1)
                         .id("top")
                     header
+                        .reveal(.drop)
                     if visibleCycle == nil || isPaused {
                         overviewCard
+                            .reveal(.zoom, 1)
                     }
                     if let cycle = todayCycle, cycle.stopDay {
                         stopDayBanner(cycle)
+                            .reveal(.blur, 2)
                     } else if dailyLimitReached {
                         dailyLimitBanner
+                            .reveal(.blur, 2)
+                    }
+                    if !weekClosedTrades.isEmpty {
+                        weekSummaryCard
+                            .reveal(.rise, 2)
                     }
                     content
+                        .reveal(.rise, 3)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -115,15 +136,41 @@ struct TodayView: View {
                 dailyLimitBadge
             }
             Spacer(minLength: 4)
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Button {
+                    showWeekPlan = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showSecondBrain = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
                 Button {
                     showLevels = true
                     Haptics.tap()
                 } label: {
                     Image(systemName: "square.stack.3d.up")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 38, height: 38)
+                        .frame(width: 34, height: 34)
                         .background(Circle().fill(Color.white.opacity(0.07)))
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
@@ -134,9 +181,9 @@ struct TodayView: View {
                     Haptics.tap()
                 } label: {
                     Image(systemName: "gearshape")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 38, height: 38)
+                        .frame(width: 34, height: 34)
                         .background(Circle().fill(Color.white.opacity(0.07)))
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
@@ -166,6 +213,99 @@ struct TodayView: View {
             return "\(Fmt.day(draft.day)) · незавершённый цикл"
         }
         return "\(Fmt.day(.now)) · новый цикл"
+    }
+
+    // MARK: - Week summary
+
+    private var weekCalendar: Calendar { Calendar.current }
+
+    private var weekStartDate: Date {
+        let today = weekCalendar.startOfDay(for: .now)
+        return weekCalendar.date(byAdding: .day, value: -6, to: today) ?? today
+    }
+
+    private var weekClosedTrades: [Trade] {
+        let calendar = weekCalendar
+        let from = weekStartDate
+
+        return trades.filter { trade in
+            guard trade.result != .open else { return false }
+            return calendar.startOfDay(for: trade.tradingDay) >= from
+        }
+    }
+
+    private var weekTotalR: Double {
+        weekClosedTrades.reduce(0) { $0 + $1.actualR }
+    }
+
+    private var weekWinRate: Int {
+        guard !weekClosedTrades.isEmpty else { return 0 }
+        let wins = weekClosedTrades.filter { $0.actualR > 0.05 }.count
+        return Int((Double(wins) / Double(weekClosedTrades.count) * 100).rounded())
+    }
+
+    private var weekBestDay: (date: Date, r: Double)? {
+        var totals: [Date: Double] = [:]
+
+        for trade in weekClosedTrades {
+            let day = weekCalendar.startOfDay(for: trade.tradingDay)
+            totals[day, default: 0] += trade.actualR
+        }
+
+        return totals.max { $0.value < $1.value }.map { ($0.key, $0.value) }
+    }
+
+    private var weekTotalTint: Color {
+        if weekTotalR > 0.05 { return Theme.green }
+        if weekTotalR < -0.05 { return Theme.red }
+        return Theme.textPrimary
+    }
+
+    private var weekSummaryCard: some View {
+        Button {
+            showWeeklyPerformance = true
+            Haptics.tap()
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    SectionLabel(text: "Итоги недели")
+                    Spacer(minLength: 8)
+                    Text("7 дней")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textTertiary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(Fmt.r(weekTotalR))
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(weekTotalTint)
+                        .contentTransition(.numericText())
+
+                    Text("\(Fmt.deals(weekClosedTrades.count)) · \(weekWinRate)% win rate")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+
+                if let best = weekBestDay {
+                    Text("Лучший день · \(Fmt.weekday(best.date)) · \(Fmt.r(best.r))")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .glassCard(cornerRadius: 18)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableButtonStyle())
     }
 
     // MARK: - Overview

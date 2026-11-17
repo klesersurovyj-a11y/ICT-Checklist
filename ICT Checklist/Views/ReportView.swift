@@ -240,7 +240,9 @@ struct ReportView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     backButton
+                        .reveal(.slideLeft)
                     header
+                        .reveal(.drop)
 
                     GlassSegmented(
                         options: ReportPeriod.allCases,
@@ -248,11 +250,16 @@ struct ReportView: View {
                         label: { $0.rawValue },
                         tint: { _ in Theme.accent }
                     )
+                    .reveal(.blur, 1)
 
                     periodRow
+                        .reveal(.rise, 2)
                     summaryCard
+                        .reveal(.zoom, 3)
                     daysRow
+                        .reveal(.rise, 4)
                     comparisonCard
+                        .reveal(.rise, 5)
 
                     Text(listTitle)
                         .font(.system(size: 18, weight: .semibold))

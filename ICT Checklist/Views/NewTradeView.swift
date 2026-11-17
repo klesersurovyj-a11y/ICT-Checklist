@@ -7,11 +7,18 @@ import SwiftUI
 import SwiftData
 
 struct NewTradeView: View {
+    let prefillTrade: Trade?
+
+    init(prefillTrade: Trade? = nil) {
+        self.prefillTrade = prefillTrade
+    }
+
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
     @Query private var settingsList: [AppSettings]
     @Query private var ladderList: [RiskLadderState]
+    @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
 
     @State private var symbol = ""
     @State private var direction: Direction = .long
@@ -20,6 +27,7 @@ struct NewTradeView: View {
     @State private var takeProfit: Double?
     @State private var risk: Double = 12
     @State private var stepIndex = 0
+    @State private var account: TradingAccount? = nil
     @State private var tags: [String] = []
     @State private var newTag = ""
     @State private var note = ""
@@ -58,11 +66,17 @@ struct NewTradeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     backButton
+                        .reveal(.slideLeft)
                     header
+                        .reveal(.drop)
                     tradeCard
+                        .reveal(.zoom, 1)
                     tagsCard
+                        .reveal(.rise, 2)
                     noteField
+                        .reveal(.rise, 3)
                     footer
+                        .reveal(.rise, 4)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -91,13 +105,19 @@ struct NewTradeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: "Вручную")
+            SectionLabel(text: prefillTrade == nil ? "Вручную" : "Дубликат сделки")
             ScreenTitle(text: "Новая сделка")
-            Text("Сегодня · \(Fmt.shortDay(.now)) · ступень \(stepIndex + 1)")
+            Text(headerSubtitle)
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var headerSubtitle: String {
+        let base = "Сегодня · \(Fmt.shortDay(.now)) · ступень \(stepIndex + 1)"
+        guard let prefillTrade else { return base }
+        return "\(base) · RR из сделки \(Fmt.rr(prefillTrade.plannedRR))"
     }
 
     // MARK: - Trade form
@@ -127,6 +147,12 @@ struct NewTradeView: View {
                     label: { $0.rawValue },
                     tint: { $0 == .long ? Theme.green : Theme.red }
                 )
+            }
+
+            divider
+
+            formRow("Счёт") {
+                accountMenu
             }
 
             divider
@@ -197,6 +223,45 @@ struct NewTradeView: View {
             content()
         }
         .padding(.vertical, 7)
+    }
+
+    private var accountMenu: some View {
+        Menu {
+            Button("Без счёта") {
+                account = nil
+                Haptics.select()
+            }
+            if !accounts.isEmpty {
+                Divider()
+                ForEach(accounts) { item in
+                    Button("\(item.name) · \(item.type.rawValue)") {
+                        account = item
+                        Haptics.select()
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(account.map { $0.name } ?? "Без счёта")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(account == nil ? Theme.textSecondary : Theme.textPrimary)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+            )
+        }
     }
 
     private var stepMenu: some View {
@@ -381,9 +446,24 @@ struct NewTradeView: View {
     private func loadDefaults() {
         guard !didLoad else { return }
         didLoad = true
+
+        if let source = prefillTrade {
+            symbol = source.symbol
+            direction = source.direction
+            stepIndex = min(max(source.ladderStepIndex, 0), 2)
+            risk = source.riskUSD
+            if accounts.count == 1 {
+                account = accounts.first
+            }
+            return
+        }
+
         stepIndex = min(max(ladderList.first?.stepIndex ?? 0, 0), 2)
         risk = amounts[stepIndex]
         symbol = symbols.first ?? "EURUSD"
+        if accounts.count == 1 {
+            account = accounts.first
+        }
     }
 
     private func save() {
@@ -405,6 +485,7 @@ struct NewTradeView: View {
             note: note
         )
         trade.tags = tags
+        trade.account = account
         context.insert(trade)
         try? context.save()
         Haptics.success()

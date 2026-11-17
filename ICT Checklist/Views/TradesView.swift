@@ -24,6 +24,8 @@ enum TradesMode: String, CaseIterable, Identifiable {
 struct TradesView: View {
     @Environment(\.modelContext) private var context
 
+    @ObservedObject private var prices = PriceBook.shared
+
     @Query(sort: \Trade.entryDate, order: .reverse)
     private var trades: [Trade]
 
@@ -180,6 +182,7 @@ struct TradesView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     header
+                        .reveal(.slideLeft)
 
                     GlassSegmented(
                         options: TradesMode.allCases,
@@ -193,8 +196,9 @@ struct TradesView: View {
                             options: TradeFilter.allCases,
                             selection: $filter,
                             label: { $0.rawValue },
-                            tint: { _ in Color.white.opacity(0.16) }
+                            tint: { _ in Theme.accent }
                         )
+                        .reveal(.blur, 1)
 
                         if hasActiveFilters {
                             activeChipsRow
@@ -210,6 +214,7 @@ struct TradesView: View {
                                     card(for: trade)
                                 }
                             }
+                            .animation(Theme.snappy, value: filteredTrades.count)
                         }
                     } else {
                         planFiltersRow
@@ -262,6 +267,32 @@ struct TradesView: View {
             case .newTrade:
                 NewTradeView()
             }
+        }
+        .task(id: openSymbols) {
+            await runPriceLoop()
+        }
+    }
+
+    private var openSymbols: Set<String> {
+        PriceMonitor.openSymbols(trades)
+    }
+
+    private func runPriceLoop() async {
+        while !Task.isCancelled {
+            let symbols = openSymbols
+            guard !symbols.isEmpty else { return }
+
+            await prices.refresh(symbols: symbols)
+
+            let autoClose = settingsList.first?.autoCloseEnabled ?? false
+            if autoClose {
+                let closed = PriceMonitor.evaluate(trades: trades, context: context, autoClose: true)
+                if !closed.isEmpty {
+                    Haptics.success()
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 45_000_000_000)
         }
     }
 
@@ -364,7 +395,7 @@ struct TradesView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
+            .padding(14)
             .glassCard(cornerRadius: 24)
             .contentShape(Rectangle())
         }
@@ -410,7 +441,7 @@ struct TradesView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(14)
         .glassCard(cornerRadius: 24)
     }
 
@@ -690,13 +721,14 @@ struct TradesView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .cardEntrance()
     }
 
     private func openCard(_ trade: Trade) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Text(trade.symbol)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 directionBadge(trade)
                 Spacer(minLength: 4)
@@ -724,8 +756,13 @@ struct TradesView: View {
                     tint: Theme.blue,
                     emphasized: true
                 )
+                if let account = trade.account {
+                    TradePill(text: account.name, tint: Theme.lavender)
+                }
                 Spacer(minLength: 0)
             }
+
+            liveBlock(trade)
 
             if !trade.tags.isEmpty {
                 tagsRow(trade.tags)
@@ -736,7 +773,7 @@ struct TradesView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(14)
         .glassCard(cornerRadius: 24)
     }
 
@@ -744,7 +781,7 @@ struct TradesView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Text(trade.symbol)
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 directionBadge(trade)
                 Spacer(minLength: 4)
@@ -762,6 +799,9 @@ struct TradesView: View {
             HStack(spacing: 8) {
                 resultPill(trade)
                 TradePill(text: Fmt.money(trade.riskUSD), tint: Theme.blue, emphasized: true)
+                if let account = trade.account {
+                    TradePill(text: account.name, tint: Theme.lavender)
+                }
                 Spacer(minLength: 0)
                 Text(Fmt.shortDay(trade.tradingDay))
                     .font(.system(size: 11, weight: .medium))
@@ -777,12 +817,52 @@ struct TradesView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(14)
         .glassCard(cornerRadius: 24)
     }
 
-    private func tagsRow(_ tags: [String]) -> some View {
-        HStack(spacing: 6) {
+    private func liveBlock(_ trade: Trade) -> some View {
+        let quote = prices.quote(for: trade.symbol)
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(quote == nil ? Theme.textTertiary : Theme.accent)
+                .frame(width: 5, height: 5)
+
+            if let quote {
+                Text("Рынок \(Fmt.price(quote.price))")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+
+                if let distances = PriceMonitor.distances(trade, price: quote.price) {
+                    Text("До TP \(String(format: "%.1f", distances.toTargetR))R · до SL \(String(format: "%.1f", distances.toStopR))R")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+            } else {
+                Text("Цена рынка недоступна")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            Spacer(minLength: 0)
+
+            if prices.isRefreshing {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.white)
+            } else if let quote {
+                Text(Fmt.time(quote.updatedAt))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: quote?.price)
+    }
+
+    private func tagsRow(_ tags: [String]) -> some View {        HStack(spacing: 6) {
             ForEach(Array(tags.prefix(3)), id: \.self) { tag in
                 Text(tag)
                     .font(.system(size: 10.5, weight: .semibold))
@@ -882,7 +962,7 @@ struct TradesView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(14)
         .glassCard(cornerRadius: 24)
     }
 
@@ -1049,6 +1129,8 @@ struct TradeCloseSheet: View {
 
         try? context.save()
         LadderEngine.sync(context: context)
+        GoalReminder.check(context: context)
+        DailyLimitReminder.check(context: context)
 
         if result == .sl {
             Haptics.warning()

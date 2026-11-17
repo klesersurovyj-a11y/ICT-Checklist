@@ -14,10 +14,15 @@ struct TradeDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
+    @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
+
+    @ObservedObject private var prices = PriceBook.shared
+
     @State private var showClose = false
     @State private var showTags = false
     @State private var showGallery = false
     @State private var showCycle = false
+    @State private var showDuplicate = false
     @State private var pickedItems: [PhotosPickerItem] = []
 
     var body: some View {
@@ -27,11 +32,24 @@ struct TradeDetailView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     backButton
+                        .reveal(.drop)
                     header
+                        .reveal(.blur, 1)
+                    accountCard
+                        .reveal(.rise, 2)
                     pricesCard
+                        .reveal(.rise, 3)
+                    liveCard
+                        .reveal(.rise, 4)
                     tagsCard
+                        .reveal(.rise, 5)
                     shotsSection
+                        .reveal(.rise, 6)
                     noteCard
+                        .reveal(.rise, 7)
+
+                    duplicateButton
+                        .reveal(.rise, 8)
 
                     if trade.result == .open {
                         PrimaryButton(title: "Закрыть сделку") {
@@ -68,10 +86,101 @@ struct TradeDetailView: View {
                 TradeCycleSheet(cycle: cycle)
             }
         }
+        .fullScreenCover(isPresented: $showDuplicate) {
+            NewTradeView(prefillTrade: trade)
+        }
         .onChange(of: pickedItems) { _, items in
             guard !items.isEmpty else { return }
             Task { await importShots(items) }
         }
+        .task(id: trade.symbol) {
+            guard trade.result == .open else { return }
+            await prices.refresh(symbols: [trade.symbol.uppercased()])
+        }
+    }
+
+    // MARK: - Live market
+
+    @ViewBuilder
+    private var liveCard: some View {
+        if trade.result == .open {
+            let quote = prices.quote(for: trade.symbol)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(quote == nil ? Theme.textTertiary : Theme.accent)
+                        .frame(width: 5, height: 5)
+
+                    Text(quote == nil ? "Цена рынка" : "Цена рынка \(Fmt.price(quote!.price))")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(quote == nil ? Theme.textSecondary : .white)
+
+                    Spacer(minLength: 8)
+
+                    if let quote {
+                        Text(Fmt.time(quote.updatedAt))
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+
+                    Button {
+                        Task {
+                            await prices.refresh(symbols: [trade.symbol.uppercased()], force: true)
+                        }
+                        Haptics.tap()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(Color.white.opacity(0.06)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let quote, let distances = PriceMonitor.distances(trade, price: quote.price) {
+                    HStack(spacing: 6) {
+                        distancePill("До TP", value: distances.toTargetR, tint: Theme.green)
+                        distancePill("До SL", value: distances.toStopR, tint: Theme.red)
+                        distancePill("До BE", value: distances.toBreakEvenR, tint: Theme.textSecondary)
+                    }
+                } else {
+                    Text(
+                        prices.hasKey
+                            ? "Нажмите ↻, чтобы получить цену."
+                            : "Добавьте ключ TWELVE_DATA_API_KEY в настройках ключей приложения."
+                    )
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(14)
+            .glassCard(cornerRadius: 18)
+            .animation(.easeInOut(duration: 0.25), value: quote?.price)
+        }
+    }
+
+    private func distancePill(_ title: String, value: Double, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 10))
+                .foregroundStyle(Theme.textTertiary)
+            Text(String(format: "%.1fR", value))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
     }
 
     // MARK: - Header
@@ -81,9 +190,9 @@ struct TradeDetailView: View {
             dismiss()
         } label: {
             Image(systemName: "chevron.left")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
-                .frame(width: 42, height: 42)
+                .frame(width: 36, height: 36)
                 .background(Circle().fill(Color.white.opacity(0.07)))
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
         }
@@ -97,7 +206,7 @@ struct TradeDetailView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(trade.symbol)
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -107,15 +216,16 @@ struct TradeDetailView: View {
                 Spacer(minLength: 6)
 
                 Text(resultRText)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(resultRTint)
+                    .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
 
             Text(subtitle)
-                .font(.system(size: 15))
+                .font(.system(size: 13.5))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -146,6 +256,86 @@ struct TradeDetailView: View {
             .background(
                 Capsule().fill((trade.direction == .long ? Theme.green : Theme.red).opacity(0.9))
             )
+    }
+
+    private var duplicateButton: some View {
+        Button {
+            showDuplicate = true
+            Haptics.tap()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "square.on.square")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Дублировать")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            .foregroundStyle(Theme.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.8)
+            )
+        }
+        .buttonStyle(PressableButtonStyle())
+    }
+
+    // MARK: - Account
+    private var accountCard: some View {
+        Menu {
+            Button("Без счёта") {
+                setAccount(nil)
+            }
+            if !accounts.isEmpty {
+                Divider()
+                ForEach(accounts) { item in
+                    Button("\(item.name) · \(item.type.rawValue)") {
+                        setAccount(item)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Theme.accent.opacity(0.16))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "building.columns")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Счёт")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                    Text(trade.account.map { "\($0.name) · \($0.type.rawValue)" } ?? "Без счёта")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(trade.account == nil ? Theme.textSecondary : .white)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .glassCard(cornerRadius: 18)
+            .contentShape(Rectangle())
+        }
+    }
+
+    private func setAccount(_ account: TradingAccount?) {
+        trade.account = account
+        try? context.save()
+        Haptics.select()
     }
 
     // MARK: - Prices

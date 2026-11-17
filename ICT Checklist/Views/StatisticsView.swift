@@ -11,11 +11,19 @@ struct StatisticsView: View {
     @Query private var trades: [Trade]
     @Query private var settingsList: [AppSettings]
     @Query private var plans: [TradePlan]
+    @Query private var errorNotes: [ErrorNote]
+    @Query private var accounts: [TradingAccount]
 
     @State private var period: StatsPeriod = .all
     @State private var breakdownTarget: BreakdownTarget?
     @State private var showReport = false
     @State private var showGoal = false
+    @State private var showLossReview = false
+    @State private var showErrors = false
+    @State private var showJournal = false
+    @State private var showCompare = false
+    @State private var showWeeklyPerformance = false
+    @State private var showAchievements = false
 
     private var settings: AppSettings? { settingsList.first }
     private var amounts: [Double] {
@@ -35,6 +43,10 @@ struct StatisticsView: View {
         StatsEngine.charts(trades: trades, period: period)
     }
 
+    private var accountGroups: [StatsGroup] {
+        StatsEngine.accountGroups(trades: trades, accounts: accounts, period: period)
+    }
+
     var body: some View {
         ZStack {
             AppBackground()
@@ -42,6 +54,7 @@ struct StatisticsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     header
+                        .reveal(.slideRight)
 
                     GlassSegmented(
                         options: StatsPeriod.allCases,
@@ -53,13 +66,20 @@ struct StatisticsView: View {
                     Text(caption)
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.textSecondary)
+                        .reveal(.blur, 1)
 
                     if summary.closedCount == 0 {
                         emptyCard
                     } else {
                         tilesGrid
+                            .reveal(.zoom, 2)
+                        equityCard
                         streakCard
+                            .reveal(.rise, 4)
                         chartsSection
+                            .reveal(.rise, 5)
+                        weeksCard
+                            .reveal(.rise, 6)
                         breakdownSection("По символам", summary.bySymbol) { group in
                             .symbol(group.title)
                         }
@@ -68,6 +88,11 @@ struct StatisticsView: View {
                         }
                         breakdownSection("По ступеням риска", summary.byStep) { group in
                             .step(summary.byStep.firstIndex(where: { $0.id == group.id }) ?? 0)
+                        }
+                        if !accountGroups.isEmpty {
+                            breakdownSection("По счетам", accountGroups) { group in
+                                group.kind ?? .noAccount
+                            }
                         }
                         breakdownSection(
                             "По дням недели",
@@ -90,10 +115,12 @@ struct StatisticsView: View {
                     }
 
                     plansCard
+                        .reveal(.rise, 7)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .padding(.bottom, 32)
+                .animation(Theme.snappy, value: period)
             }
         }
         .fullScreenCover(item: $breakdownTarget) { target in
@@ -104,6 +131,24 @@ struct StatisticsView: View {
         }
         .fullScreenCover(isPresented: $showGoal) {
             GoalView()
+        }
+        .fullScreenCover(isPresented: $showLossReview) {
+            LossReviewView()
+        }
+        .fullScreenCover(isPresented: $showErrors) {
+            ErrorsView()
+        }
+        .fullScreenCover(isPresented: $showJournal) {
+            JournalView()
+        }
+        .fullScreenCover(isPresented: $showCompare) {
+            CompareTradesView()
+        }
+        .fullScreenCover(isPresented: $showWeeklyPerformance) {
+            WeeklyPerformanceView()
+        }
+        .fullScreenCover(isPresented: $showAchievements) {
+            AchievementsView()
         }
     }
 
@@ -116,15 +161,91 @@ struct StatisticsView: View {
                 ScreenTitle(text: "Статистика")
             }
             Spacer(minLength: 4)
-            HStack(spacing: 8) {
+            HStack(spacing: 5) {
+                Button {
+                    showAchievements = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "trophy")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showLossReview = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "arrow.down.right.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showErrors = true
+                    Haptics.tap()
+                } label: {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "exclamationmark.bubble")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(Color.white.opacity(0.07)))
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+
+                        if awaitingErrors > 0 {
+                            Text("\(awaitingErrors)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 15, height: 15)
+                                .background(Circle().fill(Theme.orange))
+                                .offset(x: 3, y: -3)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showJournal = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "book.closed")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    showCompare = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "rectangle.split.2x1")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
                 Button {
                     showGoal = true
                     Haptics.tap()
                 } label: {
                     Image(systemName: "target")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 38, height: 38)
+                        .frame(width: 30, height: 30)
                         .background(Circle().fill(Color.white.opacity(0.07)))
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
@@ -135,9 +256,9 @@ struct StatisticsView: View {
                     Haptics.tap()
                 } label: {
                     Image(systemName: "doc.text")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 38, height: 38)
+                        .frame(width: 30, height: 30)
                         .background(Circle().fill(Color.white.opacity(0.07)))
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
@@ -146,6 +267,10 @@ struct StatisticsView: View {
             .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var awaitingErrors: Int {
+        errorNotes.filter { $0.status == .awaiting }.count
     }
 
     private var caption: String {
@@ -195,6 +320,344 @@ struct StatisticsView: View {
         }
         return String(format: "%.1f", pf)
     }
+
+    // MARK: - Equity curve
+
+    private struct EquityPoint: Identifiable {
+        let id: Int
+        let date: Date
+        let value: Double
+    }
+
+    private var equityPoints: [EquityPoint] {
+        let calendar = Calendar.current
+        let closed = trades
+            .filter { $0.result != .open }
+            .filter { period.contains($0.closedAt ?? $0.tradingDay) }
+            .sorted { ($0.closedAt ?? $0.tradingDay) < ($1.closedAt ?? $1.tradingDay) }
+
+        guard let first = closed.first else { return [] }
+
+        var running = 0.0
+        var points: [EquityPoint] = [
+            EquityPoint(
+                id: 0,
+                date: calendar.startOfDay(for: first.closedAt ?? first.tradingDay),
+                value: 0
+            )
+        ]
+
+        for (offset, trade) in closed.enumerated() {
+            running += trade.actualR * trade.riskUSD
+            points.append(
+                EquityPoint(
+                    id: offset + 1,
+                    date: trade.closedAt ?? trade.tradingDay,
+                    value: running
+                )
+            )
+        }
+        return points
+    }
+
+    private var equityFinal: Double {
+        equityPoints.last?.value ?? 0
+    }
+
+    private var equityTotalR: Double {
+        trades
+            .filter { $0.result != .open }
+            .filter { period.contains($0.closedAt ?? $0.tradingDay) }
+            .reduce(0) { $0 + $1.actualR }
+    }
+
+    private var equityText: String {
+        let sign: String
+        if equityFinal > 0.005 {
+            sign = "+"
+        } else if equityFinal < -0.005 {
+            sign = "\u{2212}"
+        } else {
+            sign = ""
+        }
+        return sign + Fmt.money(abs(equityFinal))
+    }
+
+    private var equityCard: some View {
+        let points = equityPoints
+        let values = points.map(\.value)
+        let minValue = min(0, values.min() ?? 0)
+        let maxValue = max(0, values.max() ?? 0)
+        let span = max(maxValue - minValue, 1)
+        let lower = minValue - span * 0.18
+        let upper = maxValue + span * 0.18
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Equity curve")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("\(Fmt.signed(equityTotalR, digits: 1))R · капитал по закрытым сделкам")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                Spacer(minLength: 6)
+                Text(equityText)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(
+                        equityFinal > 0.005 ? Theme.green : (equityFinal < -0.005 ? Theme.red : .white)
+                    )
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+
+            Chart {
+                RuleMark(y: .value("Ноль", 0))
+                    .foregroundStyle(Color.white.opacity(0.18))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+
+                ForEach(points) { point in
+                    AreaMark(
+                        x: .value("Сделка", point.id),
+                        yStart: .value("Ноль", 0),
+                        yEnd: .value("Капитал", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.20), Color.white.opacity(0.01)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    LineMark(
+                        x: .value("Сделка", point.id),
+                        y: .value("Капитал", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(Theme.accent)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                }
+
+                if let last = points.last {
+                    PointMark(
+                        x: .value("Сделка", last.id),
+                        y: .value("Капитал", last.value)
+                    )
+                    .foregroundStyle(equityFinal >= 0 ? Theme.green : Theme.red)
+                    .symbolSize(46)
+                }
+            }
+            .chartYScale(domain: lower...upper)
+            .chartXAxis(.hidden)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine()
+                        .foregroundStyle(Color.white.opacity(0.06))
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(shortMoney(v))
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                }
+            }
+            .frame(height: 142)
+            .animation(.easeInOut(duration: 0.55), value: points.count)
+        }
+        .padding(16)
+        .glassCard(cornerRadius: 20)
+        .cardEntrance()
+    }
+
+    private func shortMoney(_ value: Double) -> String {
+        let magnitude = abs(value)
+        let text = magnitude >= 1000
+            ? String(format: "%.1fk", magnitude / 1000)
+            : String(format: "%.0f", magnitude)
+        return (value < 0 ? "\u{2212}" : "") + "$" + text
+    }
+
+    // MARK: - Weeks heat map
+
+    private struct WeekCell: Identifiable {
+        let id: Date
+        let start: Date
+        let totalR: Double
+        let trades: Int
+    }
+
+    private var weekCalendar: Calendar {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        return calendar
+    }
+
+    private var weekCells: [WeekCell] {
+        let calendar = weekCalendar
+        let today = calendar.startOfDay(for: .now)
+        guard let thisWeek = calendar.dateInterval(of: .weekOfYear, for: today)?.start else {
+            return []
+        }
+
+        let closed = trades.filter { $0.result != .open }
+
+        return (0..<12).reversed().compactMap { offset in
+            guard let start = calendar.date(byAdding: .day, value: -7 * offset, to: thisWeek),
+                  let end = calendar.date(byAdding: .day, value: 7, to: start) else {
+                return nil
+            }
+
+            let items = closed.filter { trade in
+                let day = calendar.startOfDay(for: trade.tradingDay)
+                return day >= start && day < end
+            }
+
+            return WeekCell(
+                id: start,
+                start: start,
+                totalR: items.reduce(0) { $0 + $1.actualR },
+                trades: items.count
+            )
+        }
+    }
+
+    private var weeksCard: some View {
+        let cells = weekCells
+        let filled = cells.filter { $0.trades > 0 }
+        let best = filled.max { $0.totalR < $1.totalR }
+        let worst = filled.min { $0.totalR < $1.totalR }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                SectionLabel(text: "По неделям")
+                Spacer(minLength: 8)
+                Text("12 недель")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+                spacing: 6
+            ) {
+                ForEach(cells) { cell in
+                    Button {
+                        openWeek(cell.start)
+                    } label: {
+                        weekSquare(cell)
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                }
+            }
+
+            if let best, let worst {
+                Text("Лучшая неделя \(Fmt.r(best.totalR)) · худшая \(Fmt.r(worst.totalR))")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            } else {
+                Text("Пока нет закрытых сделок за 12 недель")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            Divider()
+                .overlay(Theme.hairline)
+
+            Button {
+                showWeeklyPerformance = true
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("Разбор недели")
+                        .font(.system(size: 12.5, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundStyle(Theme.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(Color.white.opacity(0.07)))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+        .glassCard(cornerRadius: 20)
+    }
+
+    private func weekSquare(_ cell: WeekCell) -> some View {
+        let tint = weekTint(cell)
+
+        return VStack(spacing: 3) {
+            Text(Self.weekLabelFormatter.string(from: cell.start))
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+
+            Text(cell.trades == 0 ? "—" : Fmt.r(cell.totalR))
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(1, contentMode: .fit)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(weekFill(cell))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(tint.opacity(cell.trades == 0 ? 0.08 : 0.45), lineWidth: 0.8)
+        )
+    }
+
+    private func weekTint(_ cell: WeekCell) -> Color {
+        guard cell.trades > 0 else { return Theme.textTertiary }
+        if cell.totalR > 0.05 { return Theme.green }
+        if cell.totalR < -0.05 { return Theme.red }
+        return Theme.textSecondary
+    }
+
+    private func weekFill(_ cell: WeekCell) -> Color {
+        guard cell.trades > 0 else { return Color.white.opacity(0.03) }
+        if cell.totalR > 0.05 { return Theme.green.opacity(0.16) }
+        if cell.totalR < -0.05 { return Theme.red.opacity(0.16) }
+        return Color.white.opacity(0.05)
+    }
+
+    private func openWeek(_ start: Date) {
+        let calendar = weekCalendar
+        let monday = calendar.startOfDay(for: start)
+        guard let sunday = calendar.date(byAdding: .day, value: 6, to: monday) else { return }
+        let title = "Неделя \(Fmt.dayMonth(monday)) – \(Fmt.dayMonth(sunday))"
+        breakdownTarget = BreakdownTarget(
+            id: "week-\(monday.timeIntervalSince1970)",
+            title: title,
+            kind: .week(monday)
+        )
+        Haptics.tap()
+    }
+
+    private static let weekLabelFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.dateFormat = "dd.MM"
+        return formatter
+    }()
 
     // MARK: - Streaks
 
@@ -665,9 +1128,10 @@ private struct StatTile: View {
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .font(.system(size: 26, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(tint)
+                .contentTransition(.numericText())
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
             if let subtitle {
@@ -680,8 +1144,8 @@ private struct StatTile: View {
                 Spacer(minLength: 0)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
-        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .padding(13)
         .glassCard(cornerRadius: 18)
     }
 }

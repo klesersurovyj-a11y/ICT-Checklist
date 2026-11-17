@@ -47,8 +47,11 @@ struct PlanView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
                     topBar
+                        .reveal(.slideLeft)
                     headerCard
+                        .reveal(.zoom, 1)
                     statusCard
+                        .reveal(.blur, 2)
                     PlanTextBlock(
                         title: "Идея / тезис",
                         placeholder: "Что вижу на рынке и почему",
