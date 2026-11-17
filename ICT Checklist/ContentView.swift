@@ -36,7 +36,9 @@ struct ContentView: View {
                 TradeShot.self,
                 RiskLadderState.self,
                 AppSettings.self,
-                MonthlyGoal.self
+                MonthlyGoal.self,
+                TradePlan.self,
+                PlanPhoto.self
             ],
             inMemory: true
         )

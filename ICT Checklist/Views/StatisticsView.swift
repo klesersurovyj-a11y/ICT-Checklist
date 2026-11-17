@@ -10,6 +10,7 @@ import Charts
 struct StatisticsView: View {
     @Query private var trades: [Trade]
     @Query private var settingsList: [AppSettings]
+    @Query private var plans: [TradePlan]
 
     @State private var period: StatsPeriod = .all
     @State private var breakdownTarget: BreakdownTarget?
@@ -24,6 +25,10 @@ struct StatisticsView: View {
 
     private var summary: StatsSummary {
         StatsEngine.summary(trades: trades, amounts: amounts, period: period)
+    }
+
+    private var planStats: StatsEngine.PlanStats {
+        StatsEngine.planStats(plans: plans, period: period)
     }
 
     private var charts: ChartSeries {
@@ -83,6 +88,8 @@ struct StatisticsView: View {
                             }
                         }
                     }
+
+                    plansCard
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -353,6 +360,57 @@ struct StatisticsView: View {
 
     private func entryHour(of group: StatsGroup) -> Int {
         Int(group.title.prefix(2)) ?? 0
+    }
+
+    // MARK: - Plans
+
+    @ViewBuilder
+    private var plansCard: some View {
+        let stats = planStats
+
+        if stats.total > 0 {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Планы")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                HStack(spacing: 12) {
+                    StatTile(
+                        title: "Отработка планов",
+                        value: percentText(stats.executionRate),
+                        subtitle: "вход из \(stats.withResult) решений",
+                        tint: Theme.accent
+                    )
+                    StatTile(
+                        title: "Соблюдение системы",
+                        value: percentText(stats.complianceRate),
+                        subtitle: "чек-лист 100%",
+                        tint: Theme.green
+                    )
+                }
+
+                Text(countsLine(stats))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .glassCard(cornerRadius: 26)
+        }
+    }
+
+    private func percentText(_ value: Double) -> String {
+        "\(Int((value * 100).rounded()))%"
+    }
+
+    private func countsLine(_ stats: StatsEngine.PlanStats) -> String {
+        var parts = ["Планов \(stats.total)"]
+        if stats.decided > 0 { parts.append("Win / Loss / BE \(stats.decided)") }
+        if stats.skipped > 0 { parts.append("Skip \(stats.skipped)") }
+        if stats.noTrade > 0 { parts.append("No trade \(stats.noTrade)") }
+        if stats.pending > 0 { parts.append("Без итога \(stats.pending)") }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Charts

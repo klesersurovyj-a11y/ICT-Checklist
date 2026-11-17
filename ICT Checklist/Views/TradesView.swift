@@ -14,12 +14,26 @@ enum TradeFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum TradesMode: String, CaseIterable, Identifiable {
+    case trades = "Сделки"
+    case plans = "Планы"
+
+    var id: String { rawValue }
+}
+
 struct TradesView: View {
     @Environment(\.modelContext) private var context
 
     @Query(sort: \Trade.entryDate, order: .reverse)
     private var trades: [Trade]
 
+    @Query(sort: \TradePlan.day, order: .reverse)
+    private var plans: [TradePlan]
+
+    @Query private var settingsList: [AppSettings]
+
+    @State private var mode: TradesMode = .trades
+    @State private var planFilter: PlanResult? = nil
     @State private var filter: TradeFilter = .all
     @State private var activeSheet: TradesSheet?
     @State private var activeCover: TradesCover?
@@ -27,6 +41,7 @@ struct TradesView: View {
     private enum TradesCover: Identifiable {
         case gallery(Trade)
         case trade(Trade)
+        case plan(TradePlan)
         case newTrade
 
         var id: String {
@@ -35,6 +50,8 @@ struct TradesView: View {
                 return "gallery-\(trade.persistentModelID.hashValue)"
             case .trade(let trade):
                 return "trade-\(trade.persistentModelID.hashValue)"
+            case .plan(let plan):
+                return "plan-\(plan.persistentModelID.hashValue)"
             case .newTrade:
                 return "new-trade"
             }
@@ -165,24 +182,45 @@ struct TradesView: View {
                     header
 
                     GlassSegmented(
-                        options: TradeFilter.allCases,
-                        selection: $filter,
+                        options: TradesMode.allCases,
+                        selection: $mode,
                         label: { $0.rawValue },
-                        tint: { _ in Color.white.opacity(0.16) }
+                        tint: { _ in Theme.accent }
                     )
 
-                    if hasActiveFilters {
-                        activeChipsRow
-                    }
+                    if mode == .trades {
+                        GlassSegmented(
+                            options: TradeFilter.allCases,
+                            selection: $filter,
+                            label: { $0.rawValue },
+                            tint: { _ in Color.white.opacity(0.16) }
+                        )
 
-                    searchRow
+                        if hasActiveFilters {
+                            activeChipsRow
+                        }
 
-                    if filteredTrades.isEmpty {
-                        emptyState
+                        searchRow
+
+                        if filteredTrades.isEmpty {
+                            emptyState
+                        } else {
+                            LazyVStack(spacing: 14) {
+                                ForEach(filteredTrades) { trade in
+                                    card(for: trade)
+                                }
+                            }
+                        }
                     } else {
-                        LazyVStack(spacing: 14) {
-                            ForEach(filteredTrades) { trade in
-                                card(for: trade)
+                        planFiltersRow
+
+                        if filteredPlans.isEmpty {
+                            plansEmptyState
+                        } else {
+                            LazyVStack(spacing: 14) {
+                                ForEach(filteredPlans) { plan in
+                                    planCard(plan)
+                                }
                             }
                         }
                     }
@@ -219,10 +257,174 @@ struct TradesView: View {
                 ScreenshotsGallery(trade: trade)
             case .trade(let trade):
                 TradeDetailView(trade: trade, usedTags: usedTags)
+            case .plan(let plan):
+                PlanView(plan: plan)
             case .newTrade:
                 NewTradeView()
             }
         }
+    }
+
+    // MARK: - Plans
+
+    private var filteredPlans: [TradePlan] {
+        guard let planFilter else { return plans }
+        return plans.filter { $0.result == planFilter }
+    }
+
+    private var planFiltersRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Chip(title: "Все", isSelected: planFilter == nil) {
+                    planFilter = nil
+                    Haptics.select()
+                }
+                ForEach(PlanResult.allCases) { result in
+                    Chip(
+                        title: result.rawValue,
+                        isSelected: planFilter == result,
+                        tint: planTint(result)
+                    ) {
+                        planFilter = planFilter == result ? nil : result
+                        Haptics.select()
+                    }
+                }
+            }
+            .padding(.vertical, 1)
+        }
+    }
+
+    private func planTint(_ result: PlanResult) -> Color {
+        switch result {
+        case .win: return Theme.green
+        case .loss: return Theme.red
+        case .be: return Theme.orange
+        case .skip: return Theme.textSecondary
+        case .noTrade: return Theme.accent
+        case .pending: return Theme.textSecondary
+        }
+    }
+
+    private func planCard(_ plan: TradePlan) -> some View {
+        Button {
+            activeCover = .plan(plan)
+            Haptics.tap()
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text(plan.symbol)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text(plan.direction.rawValue)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill((plan.direction == .long ? Theme.green : Theme.red).opacity(0.9))
+                        )
+                    Spacer(minLength: 6)
+                    Text(plan.result.rawValue)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(planTint(plan.result))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(planTint(plan.result).opacity(0.14)))
+                        .overlay(Capsule().strokeBorder(planTint(plan.result).opacity(0.35), lineWidth: 1))
+                }
+
+                Text(Fmt.shortDay(plan.day))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+
+                if !plan.title.isEmpty {
+                    Text(plan.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                } else if !plan.thesis.isEmpty {
+                    Text(plan.thesis)
+                        .font(.system(size: 13.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+
+                HStack(spacing: 6) {
+                    miniPill(
+                        "Чек-лист \(plan.checkedCount)/\(PlanCheck.allCases.count)",
+                        tint: plan.isChecklistComplete ? Theme.green : Theme.orange
+                    )
+                    if plan.hasPlanA { miniPill("A", tint: Theme.accent) }
+                    if plan.hasPlanB { miniPill("B", tint: Theme.accent) }
+                    if plan.hasAdaptation { miniPill("Адаптация", tint: Theme.lavender) }
+                    if !plan.photos.isEmpty { miniPill("Фото \(plan.photos.count)", tint: Theme.textSecondary) }
+                    if !plan.trades.isEmpty { miniPill("Сделок \(plan.trades.count)", tint: Theme.blue) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .glassCard(cornerRadius: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func miniPill(_ title: String, tint: Color) -> some View {
+        Text(title)
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(tint.opacity(0.12)))
+    }
+
+    private var plansEmptyState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(plans.isEmpty ? "Планов пока нет" : "Ничего не найдено")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+            Text(
+                plans.isEmpty
+                    ? "План дня: идея, сценарии A и B, адаптация, чек-лист системы, скриншоты и прикреплённые сделки."
+                    : "Смените фильтр по итогу плана — сами планы не менялись."
+            )
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            if plans.isEmpty {
+                Button {
+                    createPlan()
+                } label: {
+                    Text("Создать план")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(Theme.accent.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .glassCard(cornerRadius: 24)
+    }
+
+    private func createPlan() {
+        let symbol = settingsList.first?.symbols.first ?? "EURUSD"
+        let plan = TradePlan(
+            day: Calendar.current.startOfDay(for: .now),
+            symbol: symbol,
+            direction: .long
+        )
+        context.insert(plan)
+        try? context.save()
+        activeCover = .plan(plan)
+        Haptics.success()
     }
 
     // MARK: - Search and filters
@@ -413,10 +615,19 @@ struct TradesView: View {
                 ScreenTitle(text: "Сделки")
             }
             Spacer(minLength: 8)
-            summaryCapsule
-                .padding(.bottom, 4)
+            if mode == .trades {
+                summaryCapsule
+                    .padding(.bottom, 4)
+            } else {
+                planSummaryCapsule
+                    .padding(.bottom, 4)
+            }
             Button {
-                activeCover = .newTrade
+                if mode == .plans {
+                    createPlan()
+                } else {
+                    activeCover = .newTrade
+                }
                 Haptics.tap()
             } label: {
                 Image(systemName: "plus")
@@ -429,6 +640,22 @@ struct TradesView: View {
             .buttonStyle(.plain)
             .padding(.bottom, 4)
         }
+    }
+
+    private var planSummaryCapsule: some View {
+        let compliant = plans.filter { $0.isChecklistComplete }.count
+        return (
+            Text("Планов \(plans.count) · ")
+            + Text("по системе \(compliant)").foregroundColor(Theme.green)
+        )
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Theme.textSecondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
     }
 
     private var summaryCapsule: some View {

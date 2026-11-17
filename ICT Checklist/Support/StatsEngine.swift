@@ -109,6 +109,50 @@ enum BreakdownKind: Hashable {
 }
 
 enum StatsEngine {
+    /// Сводка по планам торговых дней.
+    struct PlanStats {
+        var total: Int = 0
+        var decided: Int = 0
+        var skipped: Int = 0
+        var noTrade: Int = 0
+        var pending: Int = 0
+        var withResult: Int = 0
+        var compliant: Int = 0
+
+        var executionRate: Double {
+            withResult > 0 ? Double(decided) / Double(withResult) : 0
+        }
+
+        var complianceRate: Double {
+            decided > 0 ? Double(compliant) / Double(decided) : 0
+        }
+    }
+
+    static func planStats(plans: [TradePlan], period: StatsPeriod) -> PlanStats {
+        var stats = PlanStats()
+        let calendar = Calendar.current
+        let filtered = plans.filter { period.contains($0.day, calendar: calendar) }
+
+        stats.total = filtered.count
+        for plan in filtered {
+            switch plan.result {
+            case .win, .loss, .be:
+                stats.decided += 1
+                if plan.isChecklistComplete {
+                    stats.compliant += 1
+                }
+            case .skip:
+                stats.skipped += 1
+            case .noTrade:
+                stats.noTrade += 1
+            case .pending:
+                stats.pending += 1
+            }
+        }
+        stats.withResult = stats.decided + stats.skipped + stats.noTrade
+        return stats
+    }
+
     /// Short names of the weekdays, Monday first.
     static let weekdayTitles = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
     /// Full names of the weekdays, Monday first.

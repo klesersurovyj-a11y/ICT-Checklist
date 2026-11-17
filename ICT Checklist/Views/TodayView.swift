@@ -15,6 +15,7 @@ struct TodayView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var ladderList: [RiskLadderState]
     @Query private var trades: [Trade]
+    @Query private var plans: [TradePlan]
 
     @State private var continuedCycle: TradingCycle?
     @State private var isPaused = false
@@ -888,8 +889,12 @@ struct TodayView: View {
             plannedRR: rr,
             note: cycle.pointANote
         )
+        let plan = plans.first {
+            Calendar.current.isDate($0.day, inSameDayAs: cycle.day)
+        }
         context.insert(trade)
         trade.cycle = cycle
+        trade.plan = plan
         cycle.trade = trade
         cycle.result = .entry
         cycle.updatedAt = .now

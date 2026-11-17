@@ -31,6 +31,7 @@ final class Trade {
     var shots: [TradeShot] = []
 
     var cycle: TradingCycle?
+    var plan: TradePlan?
 
     init(entryDate: Date = .now,
          tradingDay: Date = .now,
@@ -64,6 +65,7 @@ final class Trade {
         self.closedAt = closedAt
         self.shots = []
         self.cycle = nil
+        self.plan = nil
     }
 
     var direction: Direction {
