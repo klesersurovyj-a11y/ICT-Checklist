@@ -50,70 +50,9 @@ extension KeyLevelType {
 }
 
 struct AppBackground: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var drift: CGFloat = 0
-
     var body: some View {
-        ZStack {
-            Theme.background
-
-            blobs
-                .offset(x: drift * 70 - 35, y: drift * 50 - 25)
-                .overlay(
-                    blobs
-                        .scaleEffect(1.18)
-                        .offset(x: 40 - drift * 60, y: drift * 40 - 20)
-                        .opacity(0.55)
-                )
-                .blur(radius: 62)
-
-            // Стекло поверх фона: лёгкая дымка и затемнение по краям.
-            LinearGradient(
-                colors: [Color.white.opacity(0.05), Color.white.opacity(0.01), .clear],
-                startPoint: .top,
-                endPoint: UnitPoint(x: 0.5, y: 0.45)
-            )
-
-            RadialGradient(
-                colors: [.clear, Color.black.opacity(0.62)],
-                center: .center,
-                startRadius: 120,
-                endRadius: 640
-            )
-        }
-        .ignoresSafeArea()
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 22).repeatForever(autoreverses: true)) {
-                drift = 1
-            }
-        }
-    }
-
-    private var blobs: some View {
-        ZStack {
-            blob(color: 0x3B5BFF, opacity: 0.60, size: 640)
-                .offset(x: -130, y: -280)
-            blob(color: 0x1FB6A8, opacity: 0.42, size: 520)
-                .offset(x: 170, y: 110)
-            blob(color: 0x7A3BFF, opacity: 0.34, size: 460)
-                .offset(x: -50, y: 330)
-            blob(color: 0xFF7A45, opacity: 0.20, size: 300)
-                .offset(x: 150, y: -60)
-        }
-    }
-
-    private func blob(color: UInt32, opacity: Double, size: CGFloat) -> some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [Color(hex: color).opacity(opacity), Color(hex: color).opacity(0)],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: size / 2
-                )
-            )
-            .frame(width: size, height: size)
+        Theme.background
+            .ignoresSafeArea()
     }
 }
 
