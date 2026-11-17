@@ -31,14 +31,16 @@ enum AppContainer {
     ])
 
     static let shared: ModelContainer = {
-        let cloudConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            cloudKitDatabase: .automatic
-        )
+        if CloudAvailability.hasICloudEntitlement {
+            let cloudConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .automatic
+            )
 
-        if let container = try? ModelContainer(for: schema, configurations: [cloudConfiguration]) {
-            return container
+            if let container = try? ModelContainer(for: schema, configurations: [cloudConfiguration]) {
+                return container
+            }
         }
 
         let localConfiguration = ModelConfiguration(

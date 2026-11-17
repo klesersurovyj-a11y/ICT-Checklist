@@ -5,7 +5,6 @@
 
 import Foundation
 import Combine
-import CloudKit
 import CoreData
 import SwiftUI
 
@@ -14,8 +13,6 @@ import SwiftUI
 /// unavailable the app keeps working exactly as before.
 final class SyncStatus: ObservableObject {
     static let shared = SyncStatus()
-
-    static let containerIdentifier = "iCloud.com.organizationName.ICT-Checklist"
 
     private enum Keys {
         static let lastSyncDate = "iCloud.lastSyncDate"
@@ -28,21 +25,23 @@ final class SyncStatus: ObservableObject {
         case noAccount
         case restricted
         case unavailable
+        case localOnly
 
         var title: String {
             switch self {
-            case .unknown: return "Проверка…"
+            case .unknown: return "Ожидает"
             case .active: return "Включена"
             case .noAccount: return "Нет аккаунта iCloud"
             case .restricted: return "Ограничена"
             case .unavailable: return "Недоступна"
+            case .localOnly: return "Только на устройстве"
             }
         }
 
         var detail: String {
             switch self {
             case .unknown:
-                return "Проверяем доступность iCloud"
+                return "Синхронизация запустится при изменениях"
             case .active:
                 return "Изменения уходят и приходят сами"
             case .noAccount:
@@ -51,6 +50,8 @@ final class SyncStatus: ObservableObject {
                 return "Синхронизация ограничена настройками этого устройства"
             case .unavailable:
                 return "Нет связи с iCloud. Приложение работает с локальной базой"
+            case .localOnly:
+                return "В этой сборке нет доступа к iCloud — данные хранятся локально"
             }
         }
 
@@ -60,6 +61,7 @@ final class SyncStatus: ObservableObject {
             case .active: return Theme.green
             case .noAccount, .restricted: return Theme.orange
             case .unavailable: return Theme.red
+            case .localOnly: return Theme.textSecondary
             }
         }
     }
@@ -68,36 +70,35 @@ final class SyncStatus: ObservableObject {
     @Published private(set) var lastSyncDate: Date?
     @Published private(set) var lastSyncFailed: Bool = false
 
-    private var isChecking = false
-
     private init() {
         let defaults = UserDefaults.standard
         lastSyncDate = defaults.object(forKey: Keys.lastSyncDate) as? Date
         lastSyncFailed = defaults.bool(forKey: Keys.lastSyncFailed)
     }
 
-    /// Re-reads the account state. Safe to call on every appearance.
     func start() {
-        Task { await refresh() }
+        refresh()
     }
 
-    func refresh() async {
-        guard !isChecking else { return }
-        isChecking = true
-        defer { isChecking = false }
-
-        do {
-            let container = CKContainer(identifier: Self.containerIdentifier)
-            let status = try await container.accountStatus()
-            let resolved = Self.account(for: status)
-            DispatchQueue.main.async {
-                self.account = resolved
-            }
-        } catch {
-            DispatchQueue.main.async {
-                self.account = .unavailable
-            }
+    /// Never touches `CKContainer`: creating one without the iCloud
+    /// entitlement throws an Objective-C exception that crashes the app.
+    func refresh() {
+        guard CloudAvailability.hasICloudEntitlement else {
+            account = .localOnly
+            return
         }
+
+        guard FileManager.default.ubiquityIdentityToken != nil else {
+            account = .noAccount
+            return
+        }
+
+        if lastSyncFailed {
+            account = .unavailable
+            return
+        }
+
+        account = lastSyncDate == nil ? .unknown : .active
     }
 
     /// Feeds `NSPersistentCloudKitContainer.eventChangedNotification` events.
@@ -115,20 +116,11 @@ final class SyncStatus: ObservableObject {
         DispatchQueue.main.async {
             self.lastSyncDate = endDate
             self.lastSyncFailed = failed
+            self.refresh()
         }
 
         let defaults = UserDefaults.standard
         defaults.set(endDate, forKey: Keys.lastSyncDate)
         defaults.set(failed, forKey: Keys.lastSyncFailed)
-    }
-
-    private static func account(for status: CKAccountStatus) -> Account {
-        switch status {
-        case .available: return .active
-        case .noAccount: return .noAccount
-        case .restricted: return .restricted
-        case .couldNotDetermine, .temporarilyUnavailable: return .unavailable
-        @unknown default: return .unavailable
-        }
     }
 }
