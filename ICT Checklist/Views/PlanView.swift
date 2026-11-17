@@ -49,9 +49,51 @@ struct PlanView: View {
                     topBar
                     headerCard
                     statusCard
-                    textBlocks
+                    PlanTextBlock(
+                        title: "Идея / тезис",
+                        placeholder: "Что вижу на рынке и почему",
+                        text: $plan.thesis
+                    )
+                    planTable(
+                        title: "PLAN → A",
+                        bias: $plan.aBias,
+                        background: $plan.aBackground,
+                        what: $plan.aWhat,
+                        entry: $plan.aEntry,
+                        target: $plan.aTarget,
+                        invalidation: $plan.aInvalidation
+                    )
+                    planTable(
+                        title: "PLAN → B",
+                        bias: $plan.bBias,
+                        background: $plan.bBackground,
+                        what: $plan.bWhat,
+                        entry: $plan.bEntry,
+                        target: $plan.bTarget,
+                        invalidation: $plan.bInvalidation
+                    )
+                    PlanTextBlock(
+                        title: "Plan Adaptation",
+                        placeholder: "Как меняю план, если рынок пошёл иначе",
+                        text: $plan.adaptation
+                    )
+                    postSessionCard
+                    PlanTextBlock(
+                        title: "Conclusions",
+                        placeholder: "Выводы по сессии",
+                        text: $plan.conclusions
+                    )
+                    PlanTextBlock(
+                        title: "Narrative OUTCOME",
+                        placeholder: "Что произошло и почему",
+                        text: $plan.narrative
+                    )
+                    PlanTextBlock(
+                        title: "Заметки",
+                        placeholder: "Наблюдения, что улучшить",
+                        text: $plan.note
+                    )
                     checklistCard
-                    photosCard
                     tradesCard
                     deleteButton
                 }
@@ -70,6 +112,8 @@ struct PlanView: View {
         .onChange(of: plan.adaptation) { _, _ in touch() }
         .onChange(of: plan.note) { _, _ in touch() }
         .onChange(of: plan.title) { _, _ in touch() }
+        .onChange(of: plan.conclusions) { _, _ in touch() }
+        .onChange(of: plan.narrative) { _, _ in touch() }
         .onDisappear { save() }
         .alert("Удалить план?", isPresented: $showDeleteConfirm) {
             Button("Удалить", role: .destructive) { deletePlan() }
@@ -233,13 +277,80 @@ struct PlanView: View {
 
     // MARK: - Text blocks
 
-    private var textBlocks: some View {
-        VStack(spacing: 12) {
-            PlanTextBlock(title: "Идея / тезис", placeholder: "Что вижу на рынке и почему", text: $plan.thesis)
-            PlanTextBlock(title: "План A", placeholder: "Основной сценарий", text: $plan.planA)
-            PlanTextBlock(title: "План B", placeholder: "Альтернативный сценарий", text: $plan.planB)
-            PlanTextBlock(title: "Адаптация", placeholder: "Как меняю план, если рынок пошёл иначе", text: $plan.adaptation)
-            PlanTextBlock(title: "Заметки", placeholder: "Наблюдения, теги, что улучшить", text: $plan.note)
+    // MARK: - Plan tables
+
+    private func planTable(
+        title: String,
+        bias: Binding<String>,
+        background: Binding<String>,
+        what: Binding<String>,
+        entry: Binding<String>,
+        target: Binding<String>,
+        invalidation: Binding<String>
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Text("ASPECT")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(Theme.textTertiary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                    )
+
+                Spacer(minLength: 8)
+
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.white.opacity(0.09))
+                    )
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            Divider().overlay(Theme.hairline)
+
+            aspectRow("Bias", bias)
+            aspectRow("Background", background)
+            aspectRow("Что?", what)
+            aspectRow("Entry", entry)
+            aspectRow("Target", target)
+            aspectRow("Invalidation", invalidation, isLast: true)
+        }
+        .frame(maxWidth: .infinity)
+        .glassCard(cornerRadius: 22)
+    }
+
+    private func aspectRow(_ title: String, _ value: Binding<String>, isLast: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(title)
+                    .font(.system(size: 13.5, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 104, alignment: .leading)
+
+                TextField("—", text: value, axis: .vertical)
+                    .lineLimit(1...4)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textPrimary)
+                    .tint(Theme.accent)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+
+            if !isLast {
+                Divider()
+                    .overlay(Theme.hairline)
+                    .padding(.leading, 130)
+            }
         }
     }
 
@@ -315,20 +426,35 @@ struct PlanView: View {
 
     // MARK: - Photos
 
-    private var photosCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("СКРИНШОТЫ")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .tracking(1.3)
-                    .foregroundStyle(Theme.textTertiary)
-                Spacer(minLength: 8)
-                if !plan.photos.isEmpty {
-                    Text("\(plan.photos.count)")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                }
+    private var postSessionCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("POST-SESSION ANALYSIS")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.white)
+
+            HStack(spacing: 10) {
+                Image(systemName: "hourglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                Text("CHART TF →")
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Theme.textSecondary)
+                TextField("H1 → M15", text: $plan.chartTF)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.textPrimary)
+                    .tint(Theme.accent)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+            )
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {

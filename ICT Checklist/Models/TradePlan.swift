@@ -74,6 +74,27 @@ final class TradePlan {
     var adaptation: String = ""
     var note: String = ""
 
+    // План A по аспектам.
+    var aBias: String = ""
+    var aBackground: String = ""
+    var aWhat: String = ""
+    var aEntry: String = ""
+    var aTarget: String = ""
+    var aInvalidation: String = ""
+
+    // План B по аспектам.
+    var bBias: String = ""
+    var bBackground: String = ""
+    var bWhat: String = ""
+    var bEntry: String = ""
+    var bTarget: String = ""
+    var bInvalidation: String = ""
+
+    // Пост-сессионный разбор.
+    var chartTF: String = ""
+    var conclusions: String = ""
+    var narrative: String = ""
+
     var checklistRaw: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \PlanPhoto.plan)
@@ -99,6 +120,21 @@ final class TradePlan {
         self.planB = ""
         self.adaptation = ""
         self.note = ""
+        self.aBias = ""
+        self.aBackground = ""
+        self.aWhat = ""
+        self.aEntry = ""
+        self.aTarget = ""
+        self.aInvalidation = ""
+        self.bBias = ""
+        self.bBackground = ""
+        self.bWhat = ""
+        self.bEntry = ""
+        self.bTarget = ""
+        self.bInvalidation = ""
+        self.chartTF = ""
+        self.conclusions = ""
+        self.narrative = ""
         self.checklistRaw = ""
         self.photos = []
         self.trades = []
