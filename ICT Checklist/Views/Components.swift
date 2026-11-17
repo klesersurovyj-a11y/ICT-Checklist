@@ -492,3 +492,86 @@ struct CompletedStepRow: View {
         .buttonStyle(.plain)
     }
 }
+
+
+// MARK: - Numeric row
+
+struct NumberRow: View {
+    let title: String
+    var prefix: String = ""
+    var suffix: String = ""
+    @Binding var value: Double
+    var range: ClosedRange<Double> = 0...100000
+    var step: Double = 1
+    var digits: Int = 0
+
+    private var display: String {
+        prefix + String(format: "%.\(digits)f", value) + suffix
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 14.5))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 8)
+            HStack(spacing: 4) {
+                button("minus") { adjust(-step) }
+                Text(display)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textPrimary)
+                    .frame(minWidth: 62)
+                button("plus") { adjust(step) }
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.white.opacity(0.05)))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+        }
+    }
+
+    private func button(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(Color.white.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func adjust(_ delta: Double) {
+        let raw = value + delta
+        let clamped = min(max(raw, range.lowerBound), range.upperBound)
+        value = digits == 0 ? clamped.rounded() : (clamped * 10).rounded() / 10
+        Haptics.select()
+    }
+}
+
+// MARK: - Single line field
+
+struct SingleLineField: View {
+    let placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        TextField(placeholder, text: $text)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Theme.textPrimary)
+            .tint(Theme.accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.045))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+            )
+    }
+}

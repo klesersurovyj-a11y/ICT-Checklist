@@ -26,6 +26,7 @@ struct TodayView: View {
     @State private var showSecondBrain = false
     @State private var showWeekPlan = false
     @State private var showWeeklyPerformance = false
+    @State private var showSystem = false
 
     private var settings: AppSettings? { settingsList.first }
     private var ladder: RiskLadderState? { ladderList.first }
@@ -79,6 +80,9 @@ struct TodayView: View {
         }
         .fullScreenCover(isPresented: $showWeeklyPerformance) {
             WeeklyPerformanceView()
+        }
+        .fullScreenCover(isPresented: $showSystem) {
+            SystemView()
         }
         .task { bootstrap() }
     }
@@ -137,6 +141,19 @@ struct TodayView: View {
             }
             Spacer(minLength: 4)
             HStack(spacing: 6) {
+                Button {
+                    showSystem = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+
                 Button {
                     showWeekPlan = true
                     Haptics.tap()

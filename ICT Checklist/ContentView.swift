@@ -112,7 +112,10 @@ struct ContentView: View {
                 BrainShot.self,
                 JournalEntry.self,
                 WeekPlan.self,
-                WeekScenario.self
+                WeekScenario.self,
+                SystemBlueprint.self,
+                TraderProfile.self,
+                AssistantMessage.self
             ],
             inMemory: true
         )

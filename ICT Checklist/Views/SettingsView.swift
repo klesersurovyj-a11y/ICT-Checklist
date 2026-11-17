@@ -56,6 +56,9 @@ private struct SettingsContent: View {
     @Query private var weekPlans: [WeekPlan]
 
     @State private var showAccounts = false
+    @State private var showSystem = false
+    @State private var showProfiles = false
+    @State private var showAssistant = false
 
     @State private var shareItems: [URL] = []
     @State private var showShare = false
@@ -87,6 +90,12 @@ private struct SettingsContent: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                     .reveal(.drop)
+                systemCard
+                    .reveal(.slideLeft, 1)
+                profilesCard
+                    .reveal(.slideLeft, 1)
+                assistantCard
+                    .reveal(.slideLeft, 1)
                 symbolsCard
                     .reveal(.slideLeft, 1)
                 timeCard
@@ -140,6 +149,15 @@ private struct SettingsContent: View {
         }
         .fullScreenCover(isPresented: $showAccounts) {
             AccountsView()
+        }
+        .fullScreenCover(isPresented: $showSystem) {
+            SystemView()
+        }
+        .fullScreenCover(isPresented: $showProfiles) {
+            ProfilesView()
+        }
+        .fullScreenCover(isPresented: $showAssistant) {
+            AssistantView()
         }
         .alert("Не удалось экспортировать", isPresented: $showExportError) {
             Button("OK", role: .cancel) {}
@@ -598,6 +616,141 @@ private struct SettingsContent: View {
             ReminderService.scheduleEnd(hour: settings.cycleEndHour, minute: settings.cycleEndMinute)
         }
         JournalReminder.refresh(context: context)
+    }
+
+    // MARK: - System
+
+    private var systemCard: some View {
+        settingsCard("СИСТЕМА") {
+            Button {
+                showSystem = true
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Конструктор торговой системы")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+                        Text("TDA + Risk · этапы, риск, лимиты")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.045))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Profiles
+
+    private var profilesCard: some View {
+        settingsCard("ПРОФИЛИ") {
+            Button {
+                showProfiles = true
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "person.2")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("База профилей")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+                        Text("Трейдеры, их системы и риск")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.045))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Assistant
+
+    private var assistantCard: some View {
+        settingsCard("ИИ-АССИСТЕНТ") {
+            Button {
+                showAssistant = true
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Разбор сделок и системы")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+                        Text("TDA + Risk · стиль AlexxxFX и Mordan")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.045))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Risk ladder
