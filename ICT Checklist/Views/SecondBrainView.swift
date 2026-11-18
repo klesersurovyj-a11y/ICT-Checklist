@@ -13,16 +13,18 @@ struct SecondBrainView: View {
     @Query(sort: \BrainNote.updatedAt, order: .reverse) private var notes: [BrainNote]
 
     @State private var kindFilter: BrainKind? = nil
+    @State private var statusFilter: BrainStatus? = nil
     @State private var searchText = ""
     @State private var activeNote: BrainNote?
-    @State private var shareItems: [URL] = []
-    @State private var showShare = false
 
     private var filteredNotes: [BrainNote] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         return notes.filter { note in
             if let kindFilter, note.kind != kindFilter {
                 return false
+            }
+            if let statusFilter {
+                guard note.kind.usesStatus, note.status == statusFilter else { return false }
             }
             if !query.isEmpty {
                 let haystack = [
@@ -43,6 +45,14 @@ struct SecondBrainView: View {
 
     private func count(_ kind: BrainKind) -> Int {
         notes.filter { $0.kind == kind }.count
+    }
+
+    private func count(_ status: BrainStatus) -> Int {
+        notes.filter { $0.kind.usesStatus && $0.status == status }.count
+    }
+
+    private var confirmedCount: Int {
+        count(.confirmed)
     }
 
     private var linkedTrades: Int {
@@ -69,8 +79,10 @@ struct SecondBrainView: View {
                     if !notes.isEmpty {
                         filterRow
                             .reveal(.slideLeft, 3)
-                        searchRow
+                        statusFilterRow
                             .reveal(.slideLeft, 4)
+                        searchRow
+                            .reveal(.slideLeft, 5)
                     }
 
                     if filteredNotes.isEmpty {
@@ -97,9 +109,6 @@ struct SecondBrainView: View {
         .fullScreenCover(item: $activeNote) { note in
             BrainNoteView(note: note)
         }
-        .sheet(isPresented: $showShare) {
-            ShareSheet(items: shareItems)
-        }
     }
 
     // MARK: - Header
@@ -113,7 +122,7 @@ struct SecondBrainView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
 
@@ -126,12 +135,18 @@ struct SecondBrainView: View {
 
             pdfButton
 
-            Button {
-                create(.keyNote)
+            Menu {
+                ForEach(BrainKind.allCases) { kind in
+                    Button {
+                        create(kind)
+                    } label: {
+                        Label(kind.short, systemImage: kind.icon)
+                    }
+                }
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.black)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(Theme.accent))
                     .shadow(color: Theme.accent.opacity(0.4), radius: 10)
@@ -178,7 +193,7 @@ struct SecondBrainView: View {
             dateTitle: Fmt.day(.now),
             rows: rows.map { note in
                 BrainPDFData.Row(
-                    kind: note.kind.short,
+                    kind: note.kind.usesStatus ? "\(note.kind.short) · \(note.status.rawValue)" : note.kind.short,
                     title: note.displayTitle,
                     topic: note.topic.trimmingCharacters(in: .whitespacesAndNewlines),
                     summary: note.summary.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -192,21 +207,28 @@ struct SecondBrainView: View {
 
         guard let url = BrainPDF.make(data) else {
             Haptics.warning()
+            SharePresenter.presentFailure()
             return
         }
 
-        shareItems = [url]
-        showShare = true
+        SharePresenter.share([url])
         Haptics.success()
     }
 
     // MARK: - Summary
 
     private var tiles: some View {
-        HStack(spacing: 10) {
-            tile("Заметок", "\(count(.keyNote))", tint: Theme.lavender)
-            tile("Формул", "\(count(.formula))", tint: Theme.teal)
-            tile("Связано", "\(linkedTrades)", tint: Theme.textPrimary)
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                tile("Наблюдений", "\(count(.observation))", tint: BrainKind.observation.tint)
+                tile("Гипотез", "\(count(.hypothesis))", tint: BrainKind.hypothesis.tint)
+                tile("Правил", "\(count(.rule))", tint: BrainKind.rule.tint)
+            }
+            HStack(spacing: 10) {
+                tile("Закономерностей", "\(count(.pattern))", tint: BrainKind.pattern.tint)
+                tile("Подтверждено", "\(confirmedCount)", tint: Theme.green)
+                tile("Связано", "\(linkedTrades)", tint: Theme.textPrimary)
+            }
         }
     }
 
@@ -236,22 +258,44 @@ struct SecondBrainView: View {
                 .padding(.bottom, 4)
 
             quickRow(
-                icon: "bookmark.fill",
-                title: "Добавить ключевую заметку",
-                subtitle: "Идея, ключ, преимущества и выводы",
-                tint: Theme.lavender,
-                kind: .keyNote
+                icon: BrainKind.observation.icon,
+                title: "Записать наблюдение",
+                subtitle: "Что заметил в поведении рынка",
+                tint: BrainKind.observation.tint,
+                kind: .observation
             )
 
             Divider()
                 .overlay(Theme.hairline)
 
             quickRow(
-                icon: "arrow.triangle.branch",
-                title: "Добавить формулу",
-                subtitle: "Алгоритм работы по шагам",
-                tint: Theme.teal,
-                kind: .formula
+                icon: BrainKind.hypothesis.icon,
+                title: "Сформулировать гипотезу",
+                subtitle: "Что проверить на сделках",
+                tint: BrainKind.hypothesis.tint,
+                kind: .hypothesis
+            )
+
+            Divider()
+                .overlay(Theme.hairline)
+
+            quickRow(
+                icon: BrainKind.rule.icon,
+                title: "Зафиксировать правило",
+                subtitle: "Правило алгоритма входа и риска",
+                tint: BrainKind.rule.tint,
+                kind: .rule
+            )
+
+            Divider()
+                .overlay(Theme.hairline)
+
+            quickRow(
+                icon: BrainKind.research.icon,
+                title: "Начать исследование",
+                subtitle: "Рыночное поведение и статистика",
+                tint: BrainKind.research.tint,
+                kind: .research
             )
         }
         .padding(16)
@@ -336,13 +380,38 @@ struct SecondBrainView: View {
         }
     }
 
+    @ViewBuilder
+    private var statusFilterRow: some View {
+        if count(.observation) + count(.hypothesis) + count(.rule) + count(.research) + count(.pattern) > 0 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Chip(title: "Любой статус", isSelected: statusFilter == nil) {
+                        statusFilter = nil
+                        Haptics.select()
+                    }
+                    ForEach(BrainStatus.allCases) { status in
+                        Chip(
+                            title: "\(status.rawValue) \(count(status))",
+                            isSelected: statusFilter == status,
+                            tint: status.tint
+                        ) {
+                            statusFilter = statusFilter == status ? nil : status
+                            Haptics.select()
+                        }
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+        }
+    }
+
     private var searchRow: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Theme.textSecondary)
 
-            TextField("Поиск по заметкам и формулам", text: $searchText)
+            TextField("Поиск по наблюдениям, гипотезам и правилам", text: $searchText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .foregroundStyle(.white)
@@ -391,6 +460,15 @@ struct SecondBrainView: View {
                     .padding(.vertical, 4)
                     .background(Capsule().fill(tint(note.kind).opacity(0.14)))
                     .overlay(Capsule().strokeBorder(tint(note.kind).opacity(0.32), lineWidth: 1))
+
+                    if note.kind.usesStatus {
+                        Text(note.status.rawValue)
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundStyle(note.status.tint)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(note.status.tint.opacity(0.12)))
+                    }
 
                     if !note.topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(note.topic)
@@ -461,10 +539,7 @@ struct SecondBrainView: View {
     }
 
     private func tint(_ kind: BrainKind) -> Color {
-        switch kind {
-        case .keyNote: return Theme.lavender
-        case .formula: return Theme.teal
-        }
+        kind.tint
     }
 
     // MARK: - Empty
@@ -476,8 +551,8 @@ struct SecondBrainView: View {
                 .foregroundStyle(.white)
             Text(
                 notes.isEmpty
-                    ? "Создайте ключевую заметку с идеей и выводом или формулу с алгоритмом работы, прикрепите сделки и скриншоты."
-                    : "Смените фильтр или запрос — заметки и формулы не менялись."
+                    ? "Запишите первое наблюдение за рынком, сформулируйте гипотезу или правило алгоритма и привяжите к ним конкретные сделки."
+                    : "Смените фильтр или запрос — записи базы знаний не менялись."
             )
             .font(.system(size: 13))
             .foregroundStyle(Theme.textSecondary)

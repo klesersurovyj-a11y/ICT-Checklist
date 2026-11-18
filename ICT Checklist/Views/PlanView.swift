@@ -138,7 +138,7 @@ struct PlanView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
 
@@ -589,7 +589,7 @@ struct PlanView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(Theme.textTertiary)
                                     .frame(width: 24, height: 24)
-                                    .background(Circle().fill(Color.white.opacity(0.06)))
+                                    .glassCircle()
                             }
                             .buttonStyle(.plain)
                         }

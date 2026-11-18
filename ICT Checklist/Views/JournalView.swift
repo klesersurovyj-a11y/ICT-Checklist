@@ -17,8 +17,6 @@ struct JournalView: View {
     @State private var todayImprove = ""
     @State private var didLoadToday = false
     @State private var editingEntry: JournalEntry?
-    @State private var shareItems: [URL] = []
-    @State private var showShare = false
     @State private var searchText = ""
 
     private var today: Date {
@@ -115,9 +113,6 @@ struct JournalView: View {
                 .presentationBackground(.ultraThinMaterial)
                 .presentationCornerRadius(32)
         }
-        .sheet(isPresented: $showShare) {
-            ShareSheet(items: shareItems)
-        }
         .onAppear(perform: loadToday)
         .onDisappear { saveToday() }
     }
@@ -135,7 +130,7 @@ struct JournalView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -471,11 +466,11 @@ struct JournalView: View {
 
         guard let url = JournalPDF.make(data) else {
             Haptics.warning()
+            SharePresenter.presentFailure()
             return
         }
 
-        shareItems = [url]
-        showShare = true
+        SharePresenter.share([url])
         Haptics.success()
     }
 }

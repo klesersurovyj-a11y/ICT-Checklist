@@ -122,7 +122,7 @@ struct ProfilesView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
 
@@ -268,7 +268,7 @@ struct ProfilesView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.06)))
+                        .glassCircle()
                 }
             }
 
@@ -516,7 +516,7 @@ private struct ProfileEditorSheet: View {
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(Theme.textSecondary)
                                 .frame(width: 30, height: 30)
-                                .background(Circle().fill(Color.white.opacity(0.06)))
+                                .glassCircle()
                         }
                         .buttonStyle(.plain)
                     }

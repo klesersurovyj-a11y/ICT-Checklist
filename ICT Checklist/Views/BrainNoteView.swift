@@ -29,7 +29,7 @@ struct BrainNoteView: View {
     }
 
     private var tint: Color {
-        note.kind == .keyNote ? Theme.lavender : Theme.teal
+        note.kind.tint
     }
 
     var body: some View {
@@ -42,6 +42,10 @@ struct BrainNoteView: View {
                         .reveal(.slideLeft)
                     kindRow
                         .reveal(.blur, 1)
+                    if note.kind.usesStatus {
+                        statusRow
+                            .reveal(.blur, 1)
+                    }
                     titleBlock
                         .reveal(.drop, 2)
                     descriptionCard
@@ -106,7 +110,7 @@ struct BrainNoteView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -126,26 +130,50 @@ struct BrainNoteView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
         }
     }
 
     private var kindRow: some View {
-        GlassSegmented(
-            options: BrainKind.allCases,
-            selection: Binding(
-                get: { note.kind },
-                set: { kind in
-                    note.kind = kind
-                    persist()
-                    Haptics.select()
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(BrainKind.allCases) { kind in
+                    Chip(
+                        title: kind.short,
+                        isSelected: note.kind == kind,
+                        tint: kind.tint
+                    ) {
+                        note.kind = kind
+                        persist()
+                        Haptics.select()
+                    }
                 }
-            ),
-            label: { $0.short },
-            tint: { $0 == .keyNote ? Theme.lavender : Theme.teal }
-        )
+            }
+            .padding(.vertical, 1)
+        }
+    }
+
+    private var statusRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                SectionLabel(text: "Статус")
+                    .padding(.trailing, 2)
+                ForEach(BrainStatus.allCases) { status in
+                    Chip(
+                        title: status.rawValue,
+                        isSelected: note.status == status,
+                        tint: status.tint
+                    ) {
+                        note.status = status
+                        persist()
+                        Haptics.select()
+                    }
+                }
+            }
+            .padding(.vertical, 1)
+        }
     }
 
     private var titleBlock: some View {
@@ -220,7 +248,7 @@ struct BrainNoteView: View {
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(Theme.textTertiary)
                                 .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(0.06)))
+                                .glassCircle()
                         }
                         .buttonStyle(.plain)
                     }
@@ -458,7 +486,7 @@ struct BrainNoteView: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
                     .frame(width: 20, height: 20)
-                    .background(Circle().fill(Color.white.opacity(0.06)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
         }

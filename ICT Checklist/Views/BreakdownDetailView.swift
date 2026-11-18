@@ -83,7 +83,7 @@ struct BreakdownDetailView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 42, height: 42)
-                .background(Circle().fill(Color.white.opacity(0.07)))
+                .glassCircle()
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
         }
         .buttonStyle(.plain)

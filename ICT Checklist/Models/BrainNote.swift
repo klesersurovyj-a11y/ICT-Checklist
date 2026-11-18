@@ -6,8 +6,13 @@
 import Foundation
 import SwiftData
 
-/// Тип записи Second Brain: ключевая заметка или формула алгоритма работы.
+/// Тип записи базы знаний трейдера.
 enum BrainKind: String, CaseIterable, Identifiable {
+    case observation = "Наблюдение"
+    case hypothesis = "Гипотеза"
+    case research = "Исследование"
+    case rule = "Правило алгоритма"
+    case pattern = "Закономерность"
     case keyNote = "Ключевая заметка"
     case formula = "Формула"
 
@@ -15,6 +20,11 @@ enum BrainKind: String, CaseIterable, Identifiable {
 
     var short: String {
         switch self {
+        case .observation: return "Наблюдение"
+        case .hypothesis: return "Гипотеза"
+        case .research: return "Исследование"
+        case .rule: return "Правило"
+        case .pattern: return "Закономерность"
         case .keyNote: return "Заметка"
         case .formula: return "Формула"
         }
@@ -22,6 +32,11 @@ enum BrainKind: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .observation: return "eye"
+        case .hypothesis: return "lightbulb"
+        case .research: return "magnifyingglass"
+        case .rule: return "checklist"
+        case .pattern: return "chart.xyaxis.line"
         case .keyNote: return "bookmark.fill"
         case .formula: return "arrow.triangle.branch"
         }
@@ -29,6 +44,11 @@ enum BrainKind: String, CaseIterable, Identifiable {
 
     var keyTitle: String {
         switch self {
+        case .observation: return "Признаки"
+        case .hypothesis: return "Что проверить"
+        case .research: return "Что исследовал"
+        case .rule: return "Правила"
+        case .pattern: return "Как проявляется"
         case .keyNote: return "Ключ"
         case .formula: return "Ключевые функции"
         }
@@ -36,10 +56,35 @@ enum BrainKind: String, CaseIterable, Identifiable {
 
     var placeholderTitle: String {
         switch self {
+        case .observation: return "Например: после снятия азиатского лоу цена идёт к PDH"
+        case .hypothesis: return "Например: вход только после реакции H4 повышает winrate"
+        case .research: return "Например: поведение EURUSD в первые 30 минут Лондона"
+        case .rule: return "Например: риск не выше ступени, вход только после теста SNR"
+        case .pattern: return "Например: три TP подряд в лондонскую сессию"
         case .keyNote: return "Например: Однопоточные данные PMI"
         case .formula: return "Например: Схождение двух новостей"
         }
     }
+
+    /// Для этих типов важно, проверена ли запись на практике.
+    var usesStatus: Bool {
+        switch self {
+        case .keyNote, .formula:
+            return false
+        default:
+            return true
+        }
+    }
+}
+
+/// Статус проверки наблюдения, гипотезы или правила.
+enum BrainStatus: String, CaseIterable, Identifiable {
+    case idea = "Идея"
+    case testing = "Проверяю"
+    case confirmed = "Подтверждено"
+    case rejected = "Опровергнуто"
+
+    var id: String { rawValue }
 }
 
 /// Запись базы знаний: описание, ключ, преимущества, схема,
@@ -47,6 +92,7 @@ enum BrainKind: String, CaseIterable, Identifiable {
 @Model
 final class BrainNote {
     var kindRaw: String = BrainKind.keyNote.rawValue
+    var statusRaw: String = BrainStatus.idea.rawValue
     var title: String = ""
     var topic: String = ""
     var summary: String = ""
@@ -68,6 +114,7 @@ final class BrainNote {
 
     init(kind: BrainKind = .keyNote, title: String = "", topic: String = "") {
         self.kindRaw = kind.rawValue
+        self.statusRaw = BrainStatus.idea.rawValue
         self.title = title
         self.topic = topic
         self.summary = ""
@@ -86,6 +133,14 @@ final class BrainNote {
     var kind: BrainKind {
         get { BrainKind(rawValue: kindRaw) ?? .keyNote }
         set { kindRaw = newValue.rawValue }
+    }
+
+    var status: BrainStatus {
+        get { BrainStatus(rawValue: statusRaw) ?? .idea }
+        set {
+            statusRaw = newValue.rawValue
+            updatedAt = .now
+        }
     }
 
     var keyPoints: [String] {

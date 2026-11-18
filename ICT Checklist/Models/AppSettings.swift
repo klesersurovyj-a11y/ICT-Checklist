@@ -27,6 +27,15 @@ final class AppSettings {
     var maxDailyLossR: Double = 2
     var maxTradesPerDay: Int = 2
 
+    /// Weekly limits: a soft warning once the week's loss or trade count is reached.
+    var weeklyLimitsEnabled: Bool = false
+    /// Maximum loss for a trading week, stored as a positive number of R.
+    var maxWeeklyLossR: Double = 6
+    var maxTradesPerWeek: Int = 10
+
+    /// Максимальный риск на сделку в процентах капитала.
+    var maxRiskPercent: Double = 1
+
     /// Автозакрытие позиций по TP/SL по рыночной цене.
     var autoCloseEnabled: Bool = false
 

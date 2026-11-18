@@ -20,6 +20,8 @@ struct TradeDetailView: View {
 
     @State private var showClose = false
     @State private var showTags = false
+    @State private var showClassification = false
+    @State private var showReplay = false
     @State private var showGallery = false
     @State private var showCycle = false
     @State private var showDuplicate = false
@@ -35,6 +37,8 @@ struct TradeDetailView: View {
                         .reveal(.drop)
                     header
                         .reveal(.blur, 1)
+                    replayCard
+                        .reveal(.rise, 2)
                     accountCard
                         .reveal(.rise, 2)
                     pricesCard
@@ -43,13 +47,15 @@ struct TradeDetailView: View {
                         .reveal(.rise, 4)
                     tagsCard
                         .reveal(.rise, 5)
-                    shotsSection
+                    classificationCard
                         .reveal(.rise, 6)
+                    shotsSection
+                        .reveal(.rise, 8)
                     noteCard
-                        .reveal(.rise, 7)
+                        .reveal(.rise, 9)
 
                     duplicateButton
-                        .reveal(.rise, 8)
+                        .reveal(.rise, 10)
 
                     if trade.result == .open {
                         PrimaryButton(title: "Закрыть сделку") {
@@ -77,6 +83,16 @@ struct TradeDetailView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
                 .presentationCornerRadius(32)
+        }
+        .sheet(isPresented: $showClassification) {
+            TradeClassificationSheet(trade: trade)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+                .presentationCornerRadius(32)
+        }
+        .fullScreenCover(isPresented: $showReplay) {
+            TradeReplayView(trade: trade)
         }
         .fullScreenCover(isPresented: $showGallery) {
             ScreenshotsGallery(trade: trade)
@@ -135,7 +151,7 @@ struct TradeDetailView: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Theme.textSecondary)
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.white.opacity(0.06)))
+                            .glassCircle()
                     }
                     .buttonStyle(.plain)
                 }
@@ -193,7 +209,7 @@ struct TradeDetailView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(Color.white.opacity(0.07)))
+                .glassCircle()
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -503,6 +519,119 @@ struct TradeDetailView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Market behavior
+
+    private var classificationCard: some View {
+        Button {
+            showClassification = true
+            Haptics.tap()
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Поведение рынка")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(classificationLine)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassCard(cornerRadius: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var classificationLine: String {
+        var parts: [String] = []
+        if let structure = trade.structure {
+            parts.append(structure.rawValue)
+        }
+        if let poi = trade.poiType {
+            parts.append(poi.rawValue)
+        }
+        parts.append(trade.marketSession.rawValue)
+        return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Replay
+
+    private var replayCard: some View {
+        Button {
+            showReplay = true
+            Haptics.tap()
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Trade Replay & Review")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(replayLine)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassCard(cornerRadius: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var replayLine: String {
+        var parts: [String] = []
+        if trade.shot(with: .beforeEntry) != nil {
+            parts.append("до входа")
+        }
+        if trade.shot(with: .afterClose) != nil {
+            parts.append("после закрытия")
+        }
+        if let review = trade.review, review.adherence != .unknown {
+            parts.append(review.adherence.rawValue.lowercased())
+        }
+        guard !parts.isEmpty else {
+            return "Скриншоты, причина, контекст, соблюдение"
+        }
+        return parts.joined(separator: " · ")
+    }
+
     // MARK: - Screenshots
 
     private var shotsSection: some View {
@@ -682,5 +811,147 @@ private struct TradeCycleSheet: View {
                 .padding(.bottom, 32)
             }
         }
+    }
+}
+
+// MARK: - Classification sheet
+
+struct TradeClassificationSheet: View {
+    let trade: Trade
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                structureSection
+                poiSection
+                InfoHint(
+                    text: "Метка нужна разделу Market Behavior Analyzer. «Авто» берёт структуру и POI из цикла дня: SOF → Reversal, вход против недельного потока → Correction, рабочий Key Level → тип POI."
+                )
+            }
+            .padding(22)
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Поведение рынка")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text("\(trade.symbol) · \(Fmt.shortDay(trade.tradingDay)) · \(trade.marketSession.rawValue)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            Spacer(minLength: 8)
+            Button("Готово") {
+                dismiss()
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Theme.blue)
+        }
+    }
+
+    // MARK: - Structure
+
+    private var structureSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Структура рынка")
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Chip(
+                        title: "Авто",
+                        isSelected: trade.structureRaw.isEmpty,
+                        tint: Theme.accent
+                    ) {
+                        setStructure(nil)
+                    }
+
+                    ForEach(MarketStructure.allCases) { value in
+                        Chip(
+                            title: value.rawValue,
+                            isSelected: trade.structureRaw == value.rawValue,
+                            tint: Theme.accent
+                        ) {
+                            setStructure(value)
+                        }
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+
+            Text(structureHint)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var structureHint: String {
+        guard let derived = MarketBehavior.derivedStructure(for: trade) else {
+            return "У сделки нет цикла дня — выберите структуру вручную."
+        }
+        return "Из цикла дня: \(derived.rawValue)"
+    }
+
+    private func setStructure(_ value: MarketStructure?) {
+        trade.structureRaw = value?.rawValue ?? ""
+        try? context.save()
+        Haptics.select()
+    }
+
+    // MARK: - POI
+
+    private var poiSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "POI")
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Chip(
+                        title: "Авто",
+                        isSelected: trade.poiRaw.isEmpty,
+                        tint: Theme.accent
+                    ) {
+                        setPOI(nil)
+                    }
+
+                    ForEach(POIType.allCases) { value in
+                        Chip(
+                            title: value.rawValue,
+                            isSelected: trade.poiRaw == value.rawValue,
+                            tint: Theme.accent
+                        ) {
+                            setPOI(value)
+                        }
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+
+            Text(poiHint)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var poiHint: String {
+        guard let derived = MarketBehavior.derivedPOI(for: trade) else {
+            return "У сделки нет цикла дня — выберите POI вручную."
+        }
+        return "Из цикла дня: \(derived.rawValue)"
+    }
+
+    private func setPOI(_ value: POIType?) {
+        trade.poiRaw = value?.rawValue ?? ""
+        try? context.save()
+        Haptics.select()
     }
 }

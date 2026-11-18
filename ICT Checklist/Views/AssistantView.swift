@@ -17,6 +17,7 @@ struct AssistantView: View {
     @State private var input = ""
     @State private var isThinking = false
     @State private var errorText: String?
+    @State private var showBilling = false
     @State private var snapshotText = ""
     @State private var tradeCount = 0
     @State private var planCount = 0
@@ -58,10 +59,27 @@ struct AssistantView: View {
                         }
 
                         if let errorText {
-                            Text(errorText)
-                                .font(.system(size: 12.5))
-                                .foregroundStyle(Theme.red)
-                                .fixedSize(horizontal: false, vertical: true)
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(errorText)
+                                    .font(.system(size: 12.5))
+                                    .foregroundStyle(Theme.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                if showBilling {
+                                    Link(destination: AssistantService.billingURL) {
+                                        HStack(spacing: 6) {
+                                            Text("Открыть баланс OpenAI")
+                                                .font(.system(size: 13, weight: .semibold))
+                                            Image(systemName: "arrow.up.right")
+                                                .font(.system(size: 11, weight: .bold))
+                                        }
+                                        .foregroundStyle(Theme.background)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 8)
+                                        .background(Capsule().fill(Theme.accent))
+                                    }
+                                }
+                            }
                         }
 
                         Color.clear
@@ -95,7 +113,7 @@ struct AssistantView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
 
@@ -114,7 +132,7 @@ struct AssistantView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.06)))
+                        .glassCircle()
                 }
                 .buttonStyle(.plain)
             }
@@ -320,6 +338,7 @@ struct AssistantView: View {
 
         input = ""
         errorText = nil
+        showBilling = false
         isThinking = true
         Haptics.tap()
 
@@ -334,6 +353,8 @@ struct AssistantView: View {
                 try? context.save()
                 Haptics.success()
             } catch {
+                let assistantError = error as? AssistantError
+                showBilling = assistantError?.needsBilling ?? false
                 errorText = (error as? LocalizedError)?.errorDescription
                     ?? "Не удалось получить ответ."
                 Haptics.warning()
@@ -348,6 +369,7 @@ struct AssistantView: View {
         }
         try? context.save()
         errorText = nil
+        showBilling = false
         Haptics.warning()
     }
 }

@@ -114,20 +114,47 @@ struct ScreenshotsGallery: View {
                             ForEach(trade.sortedShots) { shot in
                                 VStack(spacing: 8) {
                                     ShotImage(shot: shot)
-                                    Button {
-                                        delete(shot)
-                                    } label: {
-                                        HStack(spacing: 6) {
-                                            Image(systemName: "trash")
-                                            Text("Удалить")
+
+                                    HStack(spacing: 8) {
+                                        Menu {
+                                            ForEach(ShotRole.allCases) { role in
+                                                Button {
+                                                    setRole(role, for: shot)
+                                                } label: {
+                                                    if shot.role == role {
+                                                        Label(role.title, systemImage: "checkmark")
+                                                    } else {
+                                                        Text(role.title)
+                                                    }
+                                                }
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "tag")
+                                                Text(shot.role == .general ? "Роль" : shot.role.title)
+                                            }
+                                            .font(.system(size: 12.5, weight: .semibold))
+                                            .foregroundStyle(shot.role == .general ? Theme.textSecondary : Theme.textPrimary)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 7)
+                                            .background(Capsule().fill(Color.white.opacity(0.07)))
                                         }
-                                        .font(.system(size: 12.5, weight: .semibold))
-                                        .foregroundStyle(Theme.red)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 7)
-                                        .background(Capsule().fill(Theme.red.opacity(0.12)))
+
+                                        Button {
+                                            delete(shot)
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: "trash")
+                                                Text("Удалить")
+                                            }
+                                            .font(.system(size: 12.5, weight: .semibold))
+                                            .foregroundStyle(Theme.red)
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 7)
+                                            .background(Capsule().fill(Theme.red.opacity(0.14)))
+                                        }
+                                        .buttonStyle(.plain)
                                     }
-                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -146,5 +173,16 @@ struct ScreenshotsGallery: View {
         context.delete(shot)
         try? context.save()
         Haptics.tap()
+    }
+
+    private func setRole(_ role: ShotRole, for shot: TradeShot) {
+        if role != .general {
+            for other in trade.shots where other !== shot && other.role == role {
+                other.role = .general
+            }
+        }
+        shot.role = role
+        try? context.save()
+        Haptics.select()
     }
 }

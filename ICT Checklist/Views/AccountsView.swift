@@ -169,7 +169,7 @@ struct AccountsView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
 
@@ -490,7 +490,7 @@ struct AccountsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.white.opacity(0.06)))
+                        .glassCircle()
                 }
                 .buttonStyle(.plain)
             }
@@ -619,7 +619,7 @@ struct AccountsView: View {
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(Theme.textTertiary)
                     .frame(width: 22, height: 22)
-                    .background(Circle().fill(Color.white.opacity(0.06)))
+                    .glassCircle()
             }
             .buttonStyle(.plain)
         }
@@ -719,7 +719,7 @@ struct AccountsView: View {
                 Text("Добавить счёт")
                     .font(.system(size: 15, weight: .semibold))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.background)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 15)
             .background(

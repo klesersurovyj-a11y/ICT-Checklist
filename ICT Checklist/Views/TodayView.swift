@@ -26,7 +26,7 @@ struct TodayView: View {
     @State private var showSecondBrain = false
     @State private var showWeekPlan = false
     @State private var showWeeklyPerformance = false
-    @State private var showSystem = false
+    @State private var showMore = false
 
     private var settings: AppSettings? { settingsList.first }
     private var ladder: RiskLadderState? { ladderList.first }
@@ -81,8 +81,8 @@ struct TodayView: View {
         .fullScreenCover(isPresented: $showWeeklyPerformance) {
             WeeklyPerformanceView()
         }
-        .fullScreenCover(isPresented: $showSystem) {
-            SystemView()
+        .fullScreenCover(isPresented: $showMore) {
+            MoreView(isModal: true)
         }
         .task { bootstrap() }
     }
@@ -142,14 +142,14 @@ struct TodayView: View {
             Spacer(minLength: 4)
             HStack(spacing: 6) {
                 Button {
-                    showSystem = true
+                    showMore = true
                     Haptics.tap()
                 } label: {
                     Image(systemName: "square.grid.2x2")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -162,7 +162,7 @@ struct TodayView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -175,7 +175,7 @@ struct TodayView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -188,7 +188,7 @@ struct TodayView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -201,7 +201,7 @@ struct TodayView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)

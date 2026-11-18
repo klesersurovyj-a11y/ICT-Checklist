@@ -59,9 +59,10 @@ private struct SettingsContent: View {
     @State private var showSystem = false
     @State private var showProfiles = false
     @State private var showAssistant = false
+    @State private var showMarketBehavior = false
+    @State private var showAlgorithmMonitor = false
+    @State private var showRiskIntelligence = false
 
-    @State private var shareItems: [URL] = []
-    @State private var showShare = false
     @State private var showExportError = false
     @State private var showNotificationsAlert = false
     @State private var priceProbe: String?
@@ -96,6 +97,12 @@ private struct SettingsContent: View {
                     .reveal(.slideLeft, 1)
                 assistantCard
                     .reveal(.slideLeft, 1)
+                marketBehaviorCard
+                    .reveal(.slideLeft, 1)
+                algorithmMonitorCard
+                    .reveal(.slideLeft, 1)
+                riskIntelligenceCard
+                    .reveal(.slideLeft, 1)
                 symbolsCard
                     .reveal(.slideLeft, 1)
                 timeCard
@@ -107,6 +114,8 @@ private struct SettingsContent: View {
                 dealCard
                     .reveal(.slideLeft, 5)
                 dailyLimitsCard
+                    .reveal(.slideLeft, 6)
+                weeklyLimitsCard
                     .reveal(.slideLeft, 6)
                 marketCard
                     .reveal(.slideLeft, 7)
@@ -144,9 +153,6 @@ private struct SettingsContent: View {
         } message: {
             Text("Символ изменится в списке выбора, уже открытые сделки останутся как есть.")
         }
-        .sheet(isPresented: $showShare) {
-            ShareSheet(items: shareItems)
-        }
         .fullScreenCover(isPresented: $showAccounts) {
             AccountsView()
         }
@@ -158,6 +164,15 @@ private struct SettingsContent: View {
         }
         .fullScreenCover(isPresented: $showAssistant) {
             AssistantView()
+        }
+        .fullScreenCover(isPresented: $showMarketBehavior) {
+            MarketBehaviorView()
+        }
+        .fullScreenCover(isPresented: $showAlgorithmMonitor) {
+            AlgorithmMonitorView()
+        }
+        .fullScreenCover(isPresented: $showRiskIntelligence) {
+            RiskIntelligenceView()
         }
         .alert("Не удалось экспортировать", isPresented: $showExportError) {
             Button("OK", role: .cancel) {}
@@ -311,7 +326,7 @@ private struct SettingsContent: View {
                         .frame(width: 30, height: 30)
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.black)
                 }
                 Text("Добавить символ")
                     .font(.system(size: 17, weight: .medium))
@@ -753,6 +768,144 @@ private struct SettingsContent: View {
         }
     }
 
+    // MARK: - Market behavior
+
+    private var marketBehaviorCard: some View {
+        settingsCard("MARKET BEHAVIOR") {
+            Button {
+                showMarketBehavior = true
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Market Behavior Analyzer")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+                        Text("Структура · сессии · дни · инструменты · POI")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.045))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Algorithm monitor
+
+    private var algorithmMonitorCard: some View {
+        settingsCard("ALGORITHM MONITOR") {
+            Button {
+                showAlgorithmMonitor = true
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Algorithm Monitor")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+                        Text("Скользящие метрики и сигнал ухудшения")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.045))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Risk intelligence
+
+    private var riskIntelligenceCard: some View {
+        settingsCard("RISK INTELLIGENCE") {
+            Button {
+                showRiskIntelligence = true
+                Haptics.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Theme.accent.opacity(0.14))
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.accent)
+                    }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Risk Intelligence")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .multilineTextAlignment(.leading)
+                        Text("Риск, просадка, лимиты и лестница")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.white.opacity(0.045))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     // MARK: - Risk ladder
 
     private var ladderCard: some View {
@@ -805,6 +958,32 @@ private struct SettingsContent: View {
                 Text("Вход блокируется, если расчётный RR ниже")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
+
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+
+                HStack(spacing: 8) {
+                    Text("Риск на сделку")
+                        .font(.system(size: 17))
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 8)
+                    HStack(spacing: 4) {
+                        CompactNumberField(
+                            value: $settings.maxRiskPercent,
+                            range: 0.1...20,
+                            digits: 1,
+                            fieldWidth: 74
+                        )
+                        Text("%")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+
+                Text("Risk Intelligence предупредит, если фактический риск сделки выше этого процента капитала")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -872,7 +1051,7 @@ private struct SettingsContent: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(settings.maxTradesPerDay <= 1 ? Theme.textTertiary : .white)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                 }
                 .buttonStyle(.plain)
                 .disabled(settings.maxTradesPerDay <= 1)
@@ -896,6 +1075,98 @@ private struct SettingsContent: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(settings.maxTradesPerDay >= 10)
+            }
+        }
+        .padding(.vertical, 9)
+    }
+
+    // MARK: - Weekly limits
+
+    private var weeklyLimitsCard: some View {
+        settingsCard("ЛИМИТЫ НЕДЕЛИ") {
+            VStack(spacing: 0) {
+                ToggleRow(
+                    title: "Включить недельные лимиты",
+                    subtitle: "Предупреждение в Risk Intelligence",
+                    isOn: $settings.weeklyLimitsEnabled
+                )
+
+                if settings.weeklyLimitsEnabled {
+                    Divider()
+                        .overlay(Color.white.opacity(0.06))
+                        .padding(.vertical, 8)
+
+                    HStack(spacing: 8) {
+                        Text("Максимальный убыток")
+                            .font(.system(size: 17))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        CompactNumberField(
+                            value: $settings.maxWeeklyLossR,
+                            prefix: "\u{2212}",
+                            range: 2...40,
+                            digits: 1,
+                            fieldWidth: 118
+                        )
+                    }
+                    .padding(.vertical, 9)
+
+                    Divider()
+                        .overlay(Color.white.opacity(0.06))
+
+                    maxTradesWeekRow
+
+                    Text("Неделя начинается с понедельника. Достигнутый лимит не блокирует входы, но даёт предупреждение в Risk Intelligence.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 10)
+                }
+            }
+        }
+    }
+
+    private var maxTradesWeekRow: some View {
+        HStack(spacing: 8) {
+            Text("Сделок за неделю")
+                .font(.system(size: 17))
+                .foregroundStyle(.white)
+            Spacer(minLength: 8)
+            HStack(spacing: 14) {
+                Button {
+                    settings.maxTradesPerWeek = max(settings.maxTradesPerWeek - 1, 1)
+                    save()
+                    Haptics.select()
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(settings.maxTradesPerWeek <= 1 ? Theme.textTertiary : .white)
+                        .frame(width: 30, height: 30)
+                        .glassCircle()
+                }
+                .buttonStyle(.plain)
+                .disabled(settings.maxTradesPerWeek <= 1)
+
+                Text("\(settings.maxTradesPerWeek)")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 20)
+
+                Button {
+                    settings.maxTradesPerWeek = min(settings.maxTradesPerWeek + 1, 30)
+                    save()
+                    Haptics.select()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Theme.accent.opacity(0.22)))
+                }
+                .buttonStyle(.plain)
+                .disabled(settings.maxTradesPerWeek >= 30)
             }
         }
         .padding(.vertical, 9)
@@ -1336,8 +1607,8 @@ private struct SettingsContent: View {
 
     private func exportCSV() {
         do {
-            shareItems = try CSVExport.writeFiles(trades: trades, cycles: cycles)
-            showShare = true
+            let files = try CSVExport.writeFiles(trades: trades, cycles: cycles)
+            SharePresenter.share(files)
             Haptics.success()
         } catch {
             showExportError = true
@@ -1357,8 +1628,7 @@ private struct SettingsContent: View {
                 journal: journalEntries,
                 weeks: weekPlans
             )
-            shareItems = [url]
-            showShare = true
+            SharePresenter.share([url])
             Haptics.success()
         } catch {
             showBackupAlert(

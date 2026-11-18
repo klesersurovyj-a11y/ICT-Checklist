@@ -42,6 +42,8 @@ enum CSVExport {
                 "Фактический R",
                 "B дал объём",
                 "Метки",
+                "Структура рынка",
+                "POI",
                 "Заметка"
             ])
         )
@@ -69,6 +71,8 @@ enum CSVExport {
                     trade.result == .open ? "" : decimal(trade.actualR, digits: 2),
                     volumeText(trade),
                     trade.tags.joined(separator: ", "),
+                    trade.structure?.rawValue ?? "",
+                    trade.poiType?.rawValue ?? "",
                     trade.note
                 ])
             )

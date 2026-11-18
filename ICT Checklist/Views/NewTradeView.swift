@@ -30,6 +30,8 @@ struct NewTradeView: View {
     @State private var account: TradingAccount? = nil
     @State private var tags: [String] = []
     @State private var newTag = ""
+    @State private var structure: MarketStructure? = nil
+    @State private var poi: POIType? = nil
     @State private var note = ""
     @State private var didLoad = false
 
@@ -71,12 +73,14 @@ struct NewTradeView: View {
                         .reveal(.drop)
                     tradeCard
                         .reveal(.zoom, 1)
-                    tagsCard
+                    classificationCard
                         .reveal(.rise, 2)
-                    noteField
+                    tagsCard
                         .reveal(.rise, 3)
-                    footer
+                    noteField
                         .reveal(.rise, 4)
+                    footer
+                        .reveal(.rise, 5)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -96,7 +100,7 @@ struct NewTradeView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 42, height: 42)
-                .background(Circle().fill(Color.white.opacity(0.07)))
+                .glassCircle()
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -333,6 +337,59 @@ struct NewTradeView: View {
         }
     }
 
+    // MARK: - Classification
+
+    private var classificationCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Поведение рынка")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Text("необязательно")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: "Структура")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(MarketStructure.allCases) { value in
+                            Chip(title: value.rawValue, isSelected: structure == value) {
+                                structure = structure == value ? nil : value
+                                Haptics.select()
+                            }
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: "POI")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(POIType.allCases) { value in
+                            Chip(title: value.rawValue, isSelected: poi == value) {
+                                poi = poi == value ? nil : value
+                                Haptics.select()
+                            }
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+            }
+
+            Text("Если не выбирать, структура и POI возьмутся из цикла дня — у ручной сделки их можно поставить позже в её карточке.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .glassCard(cornerRadius: 20)
+    }
+
     // MARK: - Tags
 
     private var tagsCard: some View {
@@ -452,6 +509,8 @@ struct NewTradeView: View {
             direction = source.direction
             stepIndex = min(max(source.ladderStepIndex, 0), 2)
             risk = source.riskUSD
+            structure = source.explicitStructure
+            poi = source.explicitPOI
             if accounts.count == 1 {
                 account = accounts.first
             }
@@ -485,6 +544,8 @@ struct NewTradeView: View {
             note: note
         )
         trade.tags = tags
+        trade.structureRaw = structure?.rawValue ?? ""
+        trade.poiRaw = poi?.rawValue ?? ""
         trade.account = account
         context.insert(trade)
         try? context.save()

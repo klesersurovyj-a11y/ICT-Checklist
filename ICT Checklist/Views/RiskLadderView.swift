@@ -12,6 +12,8 @@ struct RiskLadderView: View {
     @Query private var trades: [Trade]
     @Query private var settingsList: [AppSettings]
 
+    @State private var showRiskIntelligence = false
+
     private let cardHeight: CGFloat = 92
     private let cardGap: CGFloat = 12
 
@@ -49,6 +51,8 @@ struct RiskLadderView: View {
                         .reveal(.rise, 3)
                     history
                         .reveal(.rise, 4)
+                    riskIntelligenceCard
+                        .reveal(.rise, 5)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -56,6 +60,47 @@ struct RiskLadderView: View {
             }
         }
         .task { LadderEngine.sync(context: context) }
+        .fullScreenCover(isPresented: $showRiskIntelligence) {
+            RiskIntelligenceView()
+        }
+    }
+
+    // MARK: - Risk Intelligence
+
+    private var riskIntelligenceCard: some View {
+        Button {
+            showRiskIntelligence = true
+            Haptics.tap()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Theme.accent.opacity(0.14))
+                        .frame(width: 34, height: 34)
+                    Image(systemName: "shield.lefthalf.filled")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Risk Intelligence")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                    Text("Риск в %, просадка, лимиты и контроль лестницы")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(14)
+            .glassCard(cornerRadius: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Header

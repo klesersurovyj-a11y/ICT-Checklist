@@ -133,15 +133,22 @@ struct BackupFile: Codable {
         var fileName: String
         var imageData: Data?
         var createdAt: Date
+        var roleRaw: String? = nil
 
         init(_ shot: TradeShot) {
             fileName = shot.fileName
             imageData = shot.imageData
             createdAt = shot.createdAt
+            roleRaw = shot.roleRaw
         }
 
         func makeModel() -> TradeShot {
-            TradeShot(fileName: fileName, imageData: imageData, createdAt: createdAt)
+            TradeShot(
+                fileName: fileName,
+                imageData: imageData,
+                createdAt: createdAt,
+                role: ShotRole(rawValue: roleRaw ?? "") ?? .general
+            )
         }
     }
 
@@ -163,6 +170,12 @@ struct BackupFile: Codable {
         var isBE: Bool
         var note: String
         var tags: [String]
+        var structureRaw: String? = nil
+        var poiRaw: String? = nil
+        var reviewEntryReason: String? = nil
+        var reviewMarketContext: String? = nil
+        var reviewResultReason: String? = nil
+        var reviewAdherenceRaw: String? = nil
         var closedAt: Date?
         var cycleDay: Date?
         var accountKey: String?
@@ -186,6 +199,14 @@ struct BackupFile: Codable {
             isBE = trade.isBE
             note = trade.note
             tags = trade.tags
+            structureRaw = trade.structureRaw
+            poiRaw = trade.poiRaw
+            if let review = trade.review {
+                reviewEntryReason = review.entryReason.isEmpty ? nil : review.entryReason
+                reviewMarketContext = review.marketContext.isEmpty ? nil : review.marketContext
+                reviewResultReason = review.resultReason.isEmpty ? nil : review.resultReason
+                reviewAdherenceRaw = review.adherence == .unknown ? nil : review.adherenceRaw
+            }
             closedAt = trade.closedAt
             cycleDay = trade.cycle?.day
             accountKey = trade.account.map { "\($0.name)|\($0.typeRaw)" }
@@ -213,7 +234,25 @@ struct BackupFile: Codable {
             trade.volumeFromB = volumeFromB
             trade.isBE = isBE
             trade.tags = tags
+            trade.structureRaw = structureRaw ?? ""
+            trade.poiRaw = poiRaw ?? ""
             context.insert(trade)
+
+            if reviewEntryReason != nil
+                || reviewMarketContext != nil
+                || reviewResultReason != nil
+                || reviewAdherenceRaw != nil {
+                let review = TradeReview(trade: trade)
+                review.entryReason = reviewEntryReason ?? ""
+                review.marketContext = reviewMarketContext ?? ""
+                review.resultReason = reviewResultReason ?? ""
+                if let raw = reviewAdherenceRaw,
+                   let adherence = AlgorithmAdherence(rawValue: raw) {
+                    review.adherenceRaw = adherence.rawValue
+                }
+                context.insert(review)
+                trade.review = review
+            }
 
             for shot in shots {
                 let item = shot.makeModel()
@@ -504,6 +543,7 @@ struct BackupFile: Codable {
 
     struct BrainNoteRecord: Codable {
         var kindRaw: String
+        var statusRaw: String? = nil
         var title: String
         var topic: String
         var summary: String
@@ -520,6 +560,7 @@ struct BackupFile: Codable {
 
         init(_ note: BrainNote) {
             kindRaw = note.kindRaw
+            statusRaw = note.statusRaw
             title = note.title
             topic = note.topic
             summary = note.summary
@@ -542,6 +583,7 @@ struct BackupFile: Codable {
                 topic: topic
             )
             note.summary = summary
+            note.statusRaw = BrainStatus(rawValue: statusRaw ?? "")?.rawValue ?? BrainStatus.idea.rawValue
             note.keyRaw = keyRaw
             note.benefits = benefits
             note.schematic = schematic

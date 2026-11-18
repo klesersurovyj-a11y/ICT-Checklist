@@ -24,6 +24,9 @@ struct StatisticsView: View {
     @State private var showCompare = false
     @State private var showWeeklyPerformance = false
     @State private var showAchievements = false
+    @State private var showMarketBehavior = false
+    @State private var showAlgorithmMonitor = false
+    @State private var showMonthlyPerformance = false
 
     private var settings: AppSettings? { settingsList.first }
     private var amounts: [Double] {
@@ -67,6 +70,9 @@ struct StatisticsView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.textSecondary)
                         .reveal(.blur, 1)
+
+                    analyticsGrid
+                        .reveal(.zoom, 2)
 
                     if summary.closedCount == 0 {
                         emptyCard
@@ -150,6 +156,15 @@ struct StatisticsView: View {
         .fullScreenCover(isPresented: $showAchievements) {
             AchievementsView()
         }
+        .fullScreenCover(isPresented: $showMarketBehavior) {
+            MarketBehaviorView()
+        }
+        .fullScreenCover(isPresented: $showAlgorithmMonitor) {
+            AlgorithmMonitorView()
+        }
+        .fullScreenCover(isPresented: $showMonthlyPerformance) {
+            MonthlyPerformanceView()
+        }
     }
 
     // MARK: - Header
@@ -170,7 +185,7 @@ struct StatisticsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -183,7 +198,7 @@ struct StatisticsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -197,7 +212,7 @@ struct StatisticsView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Theme.textSecondary)
                             .frame(width: 30, height: 30)
-                            .background(Circle().fill(Color.white.opacity(0.07)))
+                            .glassCircle()
                             .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
 
                         if awaitingErrors > 0 {
@@ -220,7 +235,7 @@ struct StatisticsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -233,7 +248,7 @@ struct StatisticsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -246,7 +261,7 @@ struct StatisticsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -259,7 +274,7 @@ struct StatisticsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.white.opacity(0.07)))
+                        .glassCircle()
                         .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -275,6 +290,65 @@ struct StatisticsView: View {
 
     private var caption: String {
         "\(Fmt.deals(summary.totalCount)) · \(summary.closedCount) закрыто"
+    }
+
+    // MARK: - Market behavior
+
+    @ViewBuilder
+    private var analyticsGrid: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 10) {
+                analyticsTiles
+            }
+        } else {
+            analyticsTiles
+        }
+    }
+
+    private var analyticsTiles: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ],
+            spacing: 10
+        ) {
+            SectionTile(
+                title: "Market Behavior",
+                subtitle: "Структура, сессии, дни, POI",
+                icon: "waveform.path.ecg"
+            ) {
+                showMarketBehavior = true
+                Haptics.tap()
+            }
+
+            SectionTile(
+                title: "Algorithm Monitor",
+                subtitle: "Скользящие метрики и сигнал",
+                icon: "chart.line.uptrend.xyaxis"
+            ) {
+                showAlgorithmMonitor = true
+                Haptics.tap()
+            }
+
+            SectionTile(
+                title: "Monthly Review",
+                subtitle: "Разбор месяца в стиле AlexxxFX",
+                icon: "calendar.badge.clock"
+            ) {
+                showMonthlyPerformance = true
+                Haptics.tap()
+            }
+
+            SectionTile(
+                title: "Отчёт PDF",
+                subtitle: "Итоги за период",
+                icon: "doc.text"
+            ) {
+                showReport = true
+                Haptics.tap()
+            }
+        }
     }
 
     // MARK: - Tiles

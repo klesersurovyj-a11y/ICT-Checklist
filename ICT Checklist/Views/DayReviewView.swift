@@ -16,8 +16,6 @@ struct DayReviewView: View {
 
     @State private var day: Date
     @State private var activeTrade: Trade?
-    @State private var shareItems: [URL] = []
-    @State private var showShare = false
 
     init(day: Date = .now) {
         let start = Calendar.current.startOfDay(for: day)
@@ -162,9 +160,6 @@ struct DayReviewView: View {
         .fullScreenCover(item: $activeTrade) { trade in
             TradeDetailView(trade: trade, usedTags: usedTags)
         }
-        .sheet(isPresented: $showShare) {
-            ShareSheet(items: shareItems)
-        }
     }
 
     // MARK: - Header
@@ -178,7 +173,7 @@ struct DayReviewView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -291,11 +286,11 @@ struct DayReviewView: View {
 
         guard let url = DayReviewPDF.make(data) else {
             Haptics.warning()
+            SharePresenter.presentFailure()
             return
         }
 
-        shareItems = [url]
-        showShare = true
+        SharePresenter.share([url])
         Haptics.success()
     }
 

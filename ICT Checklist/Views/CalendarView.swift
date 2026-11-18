@@ -27,6 +27,12 @@ struct CalendarView: View {
     @State private var selectedDate: Date = Calendar.current.startOfDay(for: .now)
     @State private var reviewTarget: DayTarget?
 
+    @State private var news: [EconomicEvent] = []
+    @State private var newsLoading = false
+    @State private var newsError: String?
+    @State private var onlyHighImpact = false
+    @State private var newsUpdatedAt: Date?
+
     private static let weekdaySymbols = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]
 
     private var calendar: Calendar {
@@ -106,17 +112,21 @@ struct CalendarView: View {
                         .reveal(.blur, 3)
                     selectedCard
                         .reveal(.rise, 4)
-                    footer
+                    newsCard
                         .reveal(.rise, 5)
+                    footer
+                        .reveal(.rise, 6)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .padding(.bottom, 32)
             }
+            .refreshable { await refreshNews() }
         }
         .fullScreenCover(item: $reviewTarget) { target in
             DayReviewView(day: target.day)
         }
+        .task { await loadNews() }
     }
 
     // MARK: - Header
@@ -157,7 +167,7 @@ struct CalendarView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 42, height: 42)
-                .background(Circle().fill(Color.white.opacity(0.07)))
+                .glassCircle()
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -166,12 +176,15 @@ struct CalendarView: View {
     // MARK: - Grid
 
     private var gridCard: some View {
-        VStack(spacing: 10) {
+        let newsMap = newsByDay
+
+        return VStack(spacing: 10) {
             HStack(spacing: 12) {
                 Spacer(minLength: 0)
                 legendItem("TP", tint: Theme.green)
                 legendItem("SL", tint: Theme.red)
                 legendItem("BE", tint: Theme.orange)
+                legendItem("Новости", tint: Theme.red)
             }
 
             HStack(spacing: 0) {
@@ -189,7 +202,7 @@ struct CalendarView: View {
                 spacing: 5
             ) {
                 ForEach(monthDays) { day in
-                    dayCell(day)
+                    dayCell(day, newsMap: newsMap)
                 }
             }
         }
@@ -209,13 +222,15 @@ struct CalendarView: View {
         }
     }
 
-    private func dayCell(_ day: CalendarDay) -> some View {
+    private func dayCell(_ day: CalendarDay, newsMap: [Date: [EconomicEvent]]) -> some View {
         let isSelected = calendar.isDate(day.date, inSameDayAs: selectedDate)
         let statusText = status(of: day.cycle)
         let tint = tint(of: day.cycle)
         let hasResult = statusText != nil && day.inMonth
         let dayValue = r(of: day.cycle)
         let isToday = calendar.isDateInToday(day.date)
+        let dayNews = newsMap[calendar.startOfDay(for: day.date)] ?? []
+        let hasHighNews = dayNews.contains { $0.impactKind == .high }
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -265,6 +280,14 @@ struct CalendarView: View {
                         .fill(Theme.blue)
                         .frame(width: 4, height: 4)
                         .padding(5)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if day.inMonth, !dayNews.isEmpty {
+                    Circle()
+                        .fill(hasHighNews ? Theme.red : Theme.textSecondary)
+                        .frame(width: 4, height: 4)
+                        .padding(.bottom, 3)
                 }
             }
             .shadow(color: isSelected ? Theme.blue.opacity(0.45) : .clear, radius: 8)
@@ -409,6 +432,204 @@ struct CalendarView: View {
             return "Сценарий: A \(a), B не зафиксирован"
         default:
             return "Сценарий не зафиксирован"
+        }
+    }
+
+    // MARK: - News
+
+    private var newsByDay: [Date: [EconomicEvent]] {
+        var map: [Date: [EconomicEvent]] = [:]
+        for event in news {
+            let key = calendar.startOfDay(for: event.date)
+            map[key, default: []].append(event)
+        }
+        return map
+    }
+
+    private var selectedDayNews: [EconomicEvent] {
+        let list = newsByDay[calendar.startOfDay(for: selectedDate)] ?? []
+        return onlyHighImpact ? list.filter { $0.impactKind == .high } : list
+    }
+
+    private var newsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Новости Forex Factory")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("\(Fmt.shortDay(selectedDate)) · \(Fmt.weekday(selectedDate))")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                Spacer(minLength: 6)
+                Button {
+                    Task { await refreshNews() }
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .glassCircle()
+                }
+                .buttonStyle(.plain)
+                .disabled(newsLoading)
+            }
+
+            HStack(spacing: 8) {
+                Chip(title: "Все новости", isSelected: !onlyHighImpact) {
+                    onlyHighImpact = false
+                    Haptics.select()
+                }
+                Chip(title: "Только важные", isSelected: onlyHighImpact, tint: Theme.accent) {
+                    onlyHighImpact = true
+                    Haptics.select()
+                }
+                Spacer(minLength: 0)
+            }
+
+            if newsLoading && news.isEmpty {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .tint(Theme.textSecondary)
+                    Text("Загружаю календарь…")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                .padding(.vertical, 8)
+            } else if let newsError, selectedDayNews.isEmpty {
+                InfoHint(text: newsError, tint: Theme.textTertiary, icon: "wifi.exclamationmark")
+            } else if selectedDayNews.isEmpty {
+                Text("На этот день новостей нет")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(Theme.textSecondary)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(selectedDayNews) { event in
+                        newsRow(event)
+                    }
+                }
+            }
+
+            Text(newsFooterText)
+                .font(.system(size: 10.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .glassCard(cornerRadius: 22)
+    }
+
+    private var newsFooterText: String {
+        var text = "Forex Factory · текущая неделя, время местное"
+        if let newsUpdatedAt {
+            text += " · обновлено \(Fmt.time(newsUpdatedAt))"
+        }
+        return text
+    }
+
+    private func newsRow(_ event: EconomicEvent) -> some View {
+        let impact = event.impactKind
+        let tint = newsTint(impact)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(event.country)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary)
+                Text(Fmt.time(event.date))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer(minLength: 6)
+                Text(impact.title.uppercased())
+                    .font(.system(size: 9, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(tint.opacity(0.16)))
+            }
+
+            Text(event.title)
+                .font(.system(size: 13.5, weight: .medium))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if event.forecastText != nil || event.previousText != nil || event.actualText != nil {
+                HStack(spacing: 10) {
+                    if let actual = event.actualText {
+                        newsValue("Факт", actual)
+                    }
+                    if let forecast = event.forecastText {
+                        newsValue("Прогноз", forecast)
+                    }
+                    if let previous = event.previousText {
+                        newsValue("Пред.", previous)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(11)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(impact == .high ? Theme.red.opacity(0.07) : Color.white.opacity(0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .strokeBorder(
+                    impact == .high ? Theme.red.opacity(0.25) : Color.white.opacity(0.05),
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private func newsTint(_ impact: NewsImpact) -> Color {
+        switch impact {
+        case .high: return Theme.red
+        case .medium: return Theme.textPrimary
+        case .low: return Theme.textSecondary
+        case .holiday: return Theme.lavender
+        }
+    }
+
+    private func newsValue(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(Theme.textTertiary)
+            Text(value)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    private func loadNews() async {
+        news = EconomicCalendarService.loadCache()
+        await refreshNews()
+    }
+
+    private func refreshNews() async {
+        guard !newsLoading else { return }
+        newsLoading = true
+        defer { newsLoading = false }
+
+        do {
+            let list = try await EconomicCalendarService.fetchEvents()
+            news = list
+            newsError = nil
+            newsUpdatedAt = .now
+            EconomicCalendarService.saveCache(list)
+        } catch {
+            if news.isEmpty {
+                news = EconomicCalendarService.loadCache()
+            }
+            newsError = news.isEmpty
+                ? "Не удалось загрузить новости Forex Factory. Проверьте интернет."
+                : "Не удалось обновить — показаны сохранённые данные."
         }
     }
 

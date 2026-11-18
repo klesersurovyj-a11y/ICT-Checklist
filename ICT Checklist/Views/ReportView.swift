@@ -30,8 +30,6 @@ struct ReportView: View {
 
     @State private var period: ReportPeriod = .month
     @State private var anchor: Date = .now
-    @State private var shareItems: [URL] = []
-    @State private var showShare = false
     @State private var selectedTrade: Trade?
 
     private var calendar: Calendar { Calendar.current }
@@ -296,9 +294,6 @@ struct ReportView: View {
                 .padding(.bottom, 28)
             }
         }
-        .sheet(isPresented: $showShare) {
-            ShareSheet(items: shareItems)
-        }
         .fullScreenCover(item: $selectedTrade) { trade in
             TradeDetailView(trade: trade, usedTags: usedTags)
         }
@@ -321,7 +316,7 @@ struct ReportView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.85))
                 .frame(width: 42, height: 42)
-                .background(Circle().fill(Color.white.opacity(0.07)))
+                .glassCircle()
                 .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
         }
         .buttonStyle(.plain)
@@ -379,7 +374,7 @@ struct ReportView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 40, height: 40)
-                    .background(Circle().fill(Color.white.opacity(0.06)))
+                    .glassCircle()
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -650,10 +645,10 @@ struct ReportView: View {
     private func sharePDF() {
         guard let url = ReportPDF.make(pdfReportData) else {
             Haptics.warning()
+            SharePresenter.presentFailure()
             return
         }
-        shareItems = [url]
-        showShare = true
+        SharePresenter.share([url])
         Haptics.success()
     }
 

@@ -149,7 +149,9 @@ enum AssistantContext {
         }
 
         if !notes.isEmpty {
-            let list = notes.prefix(5).map(\.displayTitle).joined(separator: " · ")
+            let list = notes.prefix(5).map { note in
+                "\(note.kind.short)\(note.kind.usesStatus ? " [\(note.status.rawValue)]" : ""): \(note.displayTitle)"
+            }.joined(separator: " · ")
             lines.append("SECOND BRAIN (последние записи): \(list)")
         }
         lines.append("ЗАПИСЕЙ В БАЗЕ ЗНАНИЙ: \(notes.count)")

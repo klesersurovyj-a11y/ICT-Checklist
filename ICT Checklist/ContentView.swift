@@ -25,14 +25,14 @@ struct ContentView: View {
             TradesView()
                 .tabItem { Label("Сделки", systemImage: "list.bullet.rectangle") }
                 .tag(1)
-            RiskLadderView()
-                .tabItem { Label("Ladder", systemImage: "stairs") }
-                .tag(2)
             StatisticsView()
                 .tabItem { Label("Статистика", systemImage: "chart.bar.xaxis") }
-                .tag(3)
+                .tag(2)
             CalendarView()
                 .tabItem { Label("Календарь", systemImage: "calendar") }
+                .tag(3)
+            MoreView()
+                .tabItem { Label("Ещё", systemImage: "square.grid.2x2") }
                 .tag(4)
         }
         .tint(Theme.accent)
@@ -106,6 +106,7 @@ struct ContentView: View {
                 TradingAccount.self,
                 AccountOperation.self,
                 LossReview.self,
+                TradeReview.self,
                 ErrorNote.self,
                 ErrorShot.self,
                 BrainNote.self,

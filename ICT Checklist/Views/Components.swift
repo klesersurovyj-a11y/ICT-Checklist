@@ -22,26 +22,40 @@ struct PrimaryButton: View {
     var isEnabled: Bool = true
     let action: () -> Void
 
+    @ViewBuilder
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(.system(size: 15, weight: .semibold))
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
-                }
+        if #available(iOS 26.0, *) {
+            Button(action: action) {
+                label
             }
-            .foregroundStyle(Theme.background)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(isEnabled ? Theme.accent : Theme.accent.opacity(0.25))
-            )
+            .buttonStyle(.glassProminent)
+            .tint(isEnabled ? Theme.accent : Theme.accent.opacity(0.35))
+            .disabled(!isEnabled)
+        } else {
+            Button(action: action) {
+                label
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(isEnabled ? Theme.accent : Theme.accent.opacity(0.25))
+                    )
+            }
+            .buttonStyle(PressableButtonStyle())
+            .disabled(!isEnabled)
         }
-        .buttonStyle(PressableButtonStyle())
-        .disabled(!isEnabled)
+    }
+
+    private var label: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+            if let icon {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+        }
+        .foregroundStyle(Theme.background)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 13)
     }
 }
 
@@ -49,23 +63,28 @@ struct SecondaryButton: View {
     let title: String
     let action: () -> Void
 
+    @ViewBuilder
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.06))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.8)
-                )
+        if #available(iOS 26.0, *) {
+            Button(action: action) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.glass)
+        } else {
+            Button(action: action) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .glassPanel(cornerRadius: 14)
+            }
+            .buttonStyle(PressableButtonStyle())
         }
-        .buttonStyle(PressableButtonStyle())
     }
 }
 
@@ -86,14 +105,7 @@ struct GlassSegmented<Option: Hashable>: View {
             }
         }
         .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .fill(Color.white.opacity(0.045))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.8)
-        )
+        .glassPanel(cornerRadius: 13)
     }
 
     private func segment(_ option: Option) -> some View {
@@ -132,19 +144,23 @@ struct Chip: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isSelected ? Theme.background : Theme.textSecondary)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule().fill(isSelected ? tint : Color.white.opacity(0.06))
-                )
-                .overlay(
-                    Capsule().strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.07), lineWidth: 0.8)
-                )
+            if isSelected {
+                label
+                    .background(Capsule().fill(tint))
+            } else {
+                label
+                    .glassCapsule()
+            }
         }
         .buttonStyle(PressableButtonStyle())
+    }
+
+    private var label: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(isSelected ? Theme.background : Theme.textSecondary)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
     }
 }
 
@@ -260,14 +276,7 @@ struct ToggleRow: View {
         }
         .tint(.white)
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.045))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
-        )
+        .glassPanel(cornerRadius: 14, interactive: true)
         .onChange(of: isOn) { _, _ in
             Haptics.select()
         }
@@ -359,10 +368,7 @@ struct MetricTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(11)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-        )
+        .glassPanel(cornerRadius: 12)
     }
 }
 
@@ -445,10 +451,7 @@ struct SummaryTable: View {
             }
         }
         .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-        )
+        .glassCard(cornerRadius: 14)
     }
 }
 
@@ -539,7 +542,7 @@ struct NumberRow: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 26, height: 26)
-                .background(Circle().fill(Color.white.opacity(0.06)))
+                .glassCircle()
         }
         .buttonStyle(.plain)
     }
@@ -549,6 +552,74 @@ struct NumberRow: View {
         let clamped = min(max(raw, range.lowerBound), range.upperBound)
         value = digits == 0 ? clamped.rounded() : (clamped * 10).rounded() / 10
         Haptics.select()
+    }
+}
+
+// MARK: - Section tile
+
+/// Плитка раздела: иконка, название, подпись и бейдж.
+/// Используется в «Все разделы» и в сетке аналитики.
+struct SectionTile: View {
+    let title: String
+    var subtitle: String = ""
+    let icon: String
+    var badge: String? = nil
+    var tint: Color = Theme.accent
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(tint.opacity(0.14))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: icon)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(tint)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    if let badge {
+                        Text(badge)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.background)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(tint))
+                    } else {
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                }
+
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
+            .padding(14)
+            .glassCard(cornerRadius: 20, interactive: true)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableButtonStyle())
     }
 }
 

@@ -33,6 +33,7 @@ enum AppContainer {
         TradingAccount.self,
         AccountOperation.self,
         LossReview.self,
+        TradeReview.self,
         ErrorNote.self,
         ErrorShot.self,
         BrainNote.self,

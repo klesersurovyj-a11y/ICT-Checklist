@@ -60,7 +60,7 @@ struct CompareTradesView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.07)))
+                    .glassCircle()
                     .overlay(Circle().strokeBorder(Color.white.opacity(0.10), lineWidth: 1))
             }
             .buttonStyle(.plain)
@@ -383,7 +383,7 @@ private struct TradeCompareColumn: View {
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 18, height: 18)
-                .background(Circle().fill(Color.white.opacity(0.06)))
+                .glassCircle()
 
             Text(title)
                 .font(.system(size: 10.5))

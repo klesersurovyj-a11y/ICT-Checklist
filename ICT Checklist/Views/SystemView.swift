@@ -473,7 +473,7 @@ private struct StageEditorSheet: View {
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(Theme.textSecondary)
                             .frame(width: 30, height: 30)
-                            .background(Circle().fill(Color.white.opacity(0.06)))
+                            .glassCircle()
                     }
                     .buttonStyle(.plain)
                 }

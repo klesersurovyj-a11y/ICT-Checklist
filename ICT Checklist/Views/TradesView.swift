@@ -516,7 +516,7 @@ struct TradesView: View {
                     if activeFilterCount > 0 {
                         Text("\(activeFilterCount)")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.black)
                             .frame(width: 16, height: 16)
                             .background(Circle().fill(Theme.blue))
                             .offset(x: 4, y: -4)
@@ -663,7 +663,7 @@ struct TradesView: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.black)
                     .frame(width: 34, height: 34)
                     .background(Circle().fill(Theme.accent))
                     .shadow(color: Theme.accent.opacity(0.4), radius: 10)

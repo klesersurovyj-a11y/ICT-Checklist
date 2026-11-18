@@ -25,6 +25,10 @@ final class Trade {
     var isBE: Bool = false
     var note: String = ""
     var tags: [String] = []
+    /// Явная метка рыночной структуры. Пусто — структура берётся из цикла дня.
+    var structureRaw: String = ""
+    /// Явная метка типа POI. Пусто — POI берётся из цикла дня.
+    var poiRaw: String = ""
     var closedAt: Date? = nil
 
     @Relationship(deleteRule: .cascade, inverse: \TradeShot.trade)
@@ -34,6 +38,7 @@ final class Trade {
     var plan: TradePlan?
     var account: TradingAccount?
     var lossReview: LossReview?
+    var review: TradeReview?
     var similarReviews: [LossReview] = []
     var errorNotes: [ErrorNote] = []
     var brainNotes: [BrainNote] = []
@@ -67,12 +72,15 @@ final class Trade {
         self.isBE = false
         self.note = note
         self.tags = []
+        self.structureRaw = ""
+        self.poiRaw = ""
         self.closedAt = closedAt
         self.shots = []
         self.cycle = nil
         self.plan = nil
         self.account = nil
         self.lossReview = nil
+        self.review = nil
         self.similarReviews = []
         self.errorNotes = []
         self.brainNotes = []
@@ -86,5 +94,31 @@ final class Trade {
     var result: TradeResult {
         get { TradeResult(rawValue: resultRaw) ?? .open }
         set { resultRaw = newValue.rawValue }
+    }
+}
+
+extension Trade {
+    /// Метка, выставленная вручную.
+    var explicitStructure: MarketStructure? {
+        MarketStructure(rawValue: structureRaw)
+    }
+
+    /// Структура рынка: сначала ручная метка, затем цикл дня.
+    var structure: MarketStructure? {
+        explicitStructure ?? MarketBehavior.derivedStructure(for: self)
+    }
+
+    /// POI, выставленный вручную.
+    var explicitPOI: POIType? {
+        POIType(rawValue: poiRaw)
+    }
+
+    /// Тип POI: сначала ручная метка, затем цикл дня.
+    var poiType: POIType? {
+        explicitPOI ?? MarketBehavior.derivedPOI(for: self)
+    }
+
+    var marketSession: MarketSession {
+        MarketBehavior.session(for: self)
     }
 }
