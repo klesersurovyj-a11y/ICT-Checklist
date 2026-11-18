@@ -57,9 +57,9 @@ final class AppSettings {
     var hiddenReviewTilesRaw: String = ""
 
     /// Провайдер ИИ-ассистента: OpenAI или OpenRouter.
-    var assistantProviderRaw: String = AssistantProvider.openAI.rawValue
+    var assistantProviderRaw: String = "openai"
     /// Модель выбранного провайдера.
-    var assistantModelName: String = AssistantProvider.openAI.defaultModel
+    var assistantModelName: String = "gpt-4o-mini"
 
     init(symbolsRaw: String = "EURUSD,GBPUSD,XAUUSD",
          minRR: Double = 2.0,

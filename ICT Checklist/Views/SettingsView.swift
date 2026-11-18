@@ -52,7 +52,6 @@ private struct SettingsContent: View {
     @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
     @Query private var errorNotes: [ErrorNote]
     @Query private var brainNotes: [BrainNote]
-    @Query(sort: \TradePlan.day, order: .reverse) private var plans: [TradePlan]
     @Query private var journalEntries: [JournalEntry]
     @Query private var weekPlans: [WeekPlan]
 
@@ -84,7 +83,8 @@ private struct SettingsContent: View {
     @State private var showAppLockAlert = false
 
     @StateObject private var sync = SyncStatus.shared
-    @ObservedObject private var appLock = AppLock.shared
+    @AppStorage("appLock.enabled") private var appLockEnabled = false
+    @State private var assistantKeys: [String: Bool] = [:]
 
     private var canDeleteSymbol: Bool {
         settings.symbols.count > 1
@@ -232,8 +232,12 @@ private struct SettingsContent: View {
             }
         }
         .task {
+            refreshAssistantKeys()
             rescheduleExistingReminders()
             sync.start()
+        }
+        .onChange(of: settings.assistantProviderRaw) { _, _ in
+            refreshAssistantKeys()
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -886,7 +890,7 @@ private struct SettingsContent: View {
 
     private var assistantKeyRow: some View {
         let provider = settings.assistantProvider
-        let hasKey = ApiKeyManager.shared.has(key: provider.keyName)
+        let hasKey = assistantKeys[provider.keyName] ?? false
 
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
@@ -1598,7 +1602,6 @@ private struct SettingsContent: View {
 
     private var demoCount: Int {
         trades.filter { $0.isDemo }.count
-            + plans.filter { $0.isDemo }.count
             + brainNotes.filter { $0.isDemo }.count
             + accounts.filter { $0.isDemo }.count
     }
@@ -1663,9 +1666,10 @@ private struct SettingsContent: View {
 
     private var appLockBinding: Binding<Bool> {
         Binding(
-            get: { appLock.isEnabled },
+            get: { appLockEnabled },
             set: { value in
-                appLock.setEnabled(value)
+                appLockEnabled = value
+                AppLock.shared.setEnabled(value)
                 if value {
                     showAppLockAlert = true
                 }
@@ -1826,6 +1830,14 @@ private struct SettingsContent: View {
     private func save() {
         try? context.save()
         CycleActivityController.shared.sync(context: context)
+    }
+
+    private func refreshAssistantKeys() {
+        var result: [String: Bool] = [:]
+        for provider in AssistantProvider.allCases {
+            result[provider.keyName] = ApiKeyManager.shared.has(key: provider.keyName)
+        }
+        assistantKeys = result
     }
 
     private func exportCSV() {

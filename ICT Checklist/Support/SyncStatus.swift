@@ -80,16 +80,12 @@ final class SyncStatus: ObservableObject {
         refresh()
     }
 
-    /// Never touches `CKContainer`: creating one without the iCloud
-    /// entitlement throws an Objective-C exception that crashes the app.
+    /// Never touches `CKContainer` or other iCloud APIs: on a re-signed build
+    /// without the entitlement they throw an Objective-C exception and
+    /// terminate the app, which is why Settings must stay clear of them.
     func refresh() {
         guard CloudAvailability.hasICloudEntitlement else {
             account = .localOnly
-            return
-        }
-
-        guard FileManager.default.ubiquityIdentityToken != nil else {
-            account = .noAccount
             return
         }
 
