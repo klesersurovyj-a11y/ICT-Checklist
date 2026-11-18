@@ -85,6 +85,9 @@ struct TodayView: View {
             MoreView(isModal: true)
         }
         .task { bootstrap() }
+        .onChange(of: visibleCycle?.resultRaw) { _, _ in
+            CycleActivityController.shared.sync(context: context)
+        }
     }
 
     // MARK: - Scroll content

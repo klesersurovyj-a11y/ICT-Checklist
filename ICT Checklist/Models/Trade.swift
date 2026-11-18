@@ -30,6 +30,8 @@ final class Trade {
     /// Явная метка типа POI. Пусто — POI берётся из цикла дня.
     var poiRaw: String = ""
     var closedAt: Date? = nil
+    /// Сделка загружена демо-базой и удаляется одной кнопкой в настройках.
+    var isDemo: Bool = false
 
     @Relationship(deleteRule: .cascade, inverse: \TradeShot.trade)
     var shots: [TradeShot] = []
@@ -75,6 +77,7 @@ final class Trade {
         self.structureRaw = ""
         self.poiRaw = ""
         self.closedAt = closedAt
+        self.isDemo = false
         self.shots = []
         self.cycle = nil
         self.plan = nil
@@ -120,5 +123,11 @@ extension Trade {
 
     var marketSession: MarketSession {
         MarketBehavior.session(for: self)
+    }
+
+    /// Денежный результат сделки: риск в долларах, умноженный на фактический R.
+    var moneyResult: Double {
+        guard result != .open else { return 0 }
+        return riskUSD * actualR
     }
 }

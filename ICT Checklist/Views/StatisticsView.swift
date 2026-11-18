@@ -55,7 +55,7 @@ struct StatisticsView: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     header
                         .reveal(.slideRight)
 
@@ -297,7 +297,7 @@ struct StatisticsView: View {
     @ViewBuilder
     private var analyticsGrid: some View {
         if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 10) {
+            GlassEffectContainer(spacing: 8) {
                 analyticsTiles
             }
         } else {
@@ -308,10 +308,10 @@ struct StatisticsView: View {
     private var analyticsTiles: some View {
         LazyVGrid(
             columns: [
-                GridItem(.flexible(), spacing: 10),
-                GridItem(.flexible(), spacing: 10)
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
             ],
-            spacing: 10
+            spacing: 8
         ) {
             SectionTile(
                 title: "Market Behavior",

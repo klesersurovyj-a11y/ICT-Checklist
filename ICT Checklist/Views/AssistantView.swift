@@ -8,16 +8,25 @@ import SwiftData
 
 struct AssistantView: View {
     var prefill: String? = nil
+    var focusMessage: AssistantMessage? = nil
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
     @Query(sort: \AssistantMessage.createdAt) private var messages: [AssistantMessage]
+    @Query private var settingsList: [AppSettings]
+
+    @AppStorage("assistant.lastCost") private var lastCost: Double = 0
+    @AppStorage("assistant.lastCostProvider") private var lastCostProvider = ""
 
     @State private var input = ""
     @State private var isThinking = false
     @State private var errorText: String?
     @State private var showBilling = false
+    @State private var quotaProvider: AssistantProvider?
+    @State private var failedPrompt: String?
+    @State private var failedHistory: [AssistantTurn] = []
+    @State private var failedSystem: String?
     @State private var snapshotText = ""
     @State private var tradeCount = 0
     @State private var planCount = 0
@@ -31,6 +40,18 @@ struct AssistantView: View {
         "Собери план на неделю"
     ]
 
+    private var settings: AppSettings? { settingsList.first }
+
+    private var provider: AssistantProvider {
+        settings?.assistantProvider ?? .openAI
+    }
+
+    private var model: String {
+        let value = settings?.assistantModelName ?? provider.defaultModel
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? provider.defaultModel : trimmed
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ZStack {
@@ -41,6 +62,7 @@ struct AssistantView: View {
                         topBar
                             .padding(.top, 8)
                         contextRow
+                        modelRow
 
                         if !hasKey {
                             keyCard
@@ -51,6 +73,7 @@ struct AssistantView: View {
                         } else {
                             ForEach(messages) { message in
                                 bubble(message)
+                                    .id(message.persistentModelID)
                             }
                         }
 
@@ -59,27 +82,7 @@ struct AssistantView: View {
                         }
 
                         if let errorText {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(errorText)
-                                    .font(.system(size: 12.5))
-                                    .foregroundStyle(Theme.red)
-                                    .fixedSize(horizontal: false, vertical: true)
-
-                                if showBilling {
-                                    Link(destination: AssistantService.billingURL) {
-                                        HStack(spacing: 6) {
-                                            Text("Открыть баланс OpenAI")
-                                                .font(.system(size: 13, weight: .semibold))
-                                            Image(systemName: "arrow.up.right")
-                                                .font(.system(size: 11, weight: .bold))
-                                        }
-                                        .foregroundStyle(Theme.background)
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 8)
-                                        .background(Capsule().fill(Theme.accent))
-                                    }
-                                }
-                            }
+                            errorCard(errorText)
                         }
 
                         Color.clear
@@ -91,9 +94,19 @@ struct AssistantView: View {
                 }
                 .onChange(of: messages.count) { _, _ in scroll(proxy) }
                 .onChange(of: isThinking) { _, _ in scroll(proxy) }
+                .task(id: focusMessage?.persistentModelID) {
+                    guard let focusMessage else { return }
+                    try? await Task.sleep(nanoseconds: 420_000_000)
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo(focusMessage.persistentModelID, anchor: .center)
+                    }
+                }
             }
             .safeAreaInset(edge: .bottom) { inputBar }
             .task { refreshContext() }
+            .onChange(of: settingsList.first?.assistantProviderRaw) { _, _ in
+                refreshKey()
+            }
             .onAppear {
                 if let prefill, input.isEmpty {
                     input = prefill
@@ -160,13 +173,50 @@ struct AssistantView: View {
         .foregroundStyle(Theme.textTertiary)
     }
 
+    private var modelRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "cpu")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+
+            Text("\(provider.title) · \(model)")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 6)
+
+            if lastCost > 0, lastCostProvider == provider.rawValue {
+                Text(costText(lastCost))
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .glassPanel(cornerRadius: 12)
+    }
+
     private var keyCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             InfoHint(
-                text: "Для ответов нужен ключ OpenAI. Его значение вводится в настройках ключей приложения — ассистент читает его как OPENAI_API_KEY.",
+                text: "Для ответов нужен ключ \(provider.title). Его значение вводится в настройках ключей приложения — ассистент читает его как \(provider.keyName).",
                 tint: Theme.orange,
                 icon: "key"
             )
+
+            Link(destination: provider.keyURL) {
+                HStack(spacing: 6) {
+                    Text("Где взять ключ \(provider.title)")
+                        .font(.system(size: 12.5, weight: .semibold))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .foregroundStyle(Theme.accent)
+            }
         }
         .padding(14)
         .glassCard(cornerRadius: 18)
@@ -212,6 +262,51 @@ struct AssistantView: View {
         }
         .padding(16)
         .glassCard(cornerRadius: 22)
+    }
+
+    private func errorCard(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(text)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.red)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if quotaProvider != nil {
+                Button {
+                    switchToOtherProvider()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Переключиться на \(provider.other.title)")
+                            .font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "arrow.left.arrow.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(Theme.background)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(Capsule().fill(Theme.accent))
+                }
+                .buttonStyle(PressableButtonStyle())
+            }
+
+            if showBilling {
+                Link(destination: provider.billingURL) {
+                    HStack(spacing: 6) {
+                        Text("Открыть баланс \(provider.title)")
+                            .font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(Theme.background)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Theme.accent))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .glassCard(cornerRadius: 18)
     }
 
     @ViewBuilder
@@ -312,7 +407,7 @@ struct AssistantView: View {
     }
 
     private func refreshContext() {
-        hasKey = ApiKeyManager.shared.has(key: "OPENAI_API_KEY")
+        refreshKey()
         let snapshot = AssistantContext.build(context: context)
         snapshotText = snapshot.text
         tradeCount = snapshot.tradeCount
@@ -320,12 +415,23 @@ struct AssistantView: View {
         systemName = snapshot.systemName
     }
 
+    private func refreshKey() {
+        hasKey = ApiKeyManager.shared.has(key: provider.keyName)
+    }
+
+    private func costText(_ value: Double) -> String {
+        guard value >= 0.0001 else { return "ответ < $0.0001" }
+        return String(format: "ответ $%.4f", value)
+    }
+
     private func send(_ text: String) {
         let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !isThinking else { return }
 
+        refreshKey()
+
         guard hasKey else {
-            errorText = "Добавьте ключ OPENAI_API_KEY, чтобы ассистент мог отвечать."
+            errorText = "Добавьте ключ \(provider.keyName), чтобы ассистент мог отвечать."
             Haptics.warning()
             return
         }
@@ -337,30 +443,92 @@ struct AssistantView: View {
         try? context.save()
 
         input = ""
+        failedPrompt = nil
+        failedHistory = []
+        failedSystem = nil
+
+        startReply(prompt: prompt, history: history, system: systemMessage)
+    }
+
+    private func startReply(prompt: String, history: [AssistantTurn], system: String) {
         errorText = nil
         showBilling = false
+        quotaProvider = nil
         isThinking = true
         Haptics.tap()
 
+        let usedProvider = provider
+        let usedModel = model
+
         Task { @MainActor in
             do {
-                let answer = try await AssistantService.reply(
-                    system: systemMessage,
+                let reply = try await AssistantService.reply(
+                    provider: usedProvider,
+                    model: usedModel,
+                    system: system,
                     history: history,
                     prompt: prompt
                 )
-                context.insert(AssistantMessage(role: "assistant", text: answer))
+                context.insert(AssistantMessage(role: "assistant", text: reply.text))
                 try? context.save()
+
+                lastCost = reply.cost ?? 0
+                lastCostProvider = reply.provider.rawValue
+                failedPrompt = nil
+                failedHistory = []
+                failedSystem = nil
+
                 Haptics.success()
             } catch {
                 let assistantError = error as? AssistantError
                 showBilling = assistantError?.needsBilling ?? false
+                quotaProvider = assistantError?.quotaProvider
                 errorText = (error as? LocalizedError)?.errorDescription
                     ?? "Не удалось получить ответ."
+
+                if assistantError?.quotaProvider != nil {
+                    failedPrompt = prompt
+                    failedHistory = history
+                    failedSystem = system
+                }
+
                 Haptics.warning()
             }
+
             isThinking = false
+            refreshKey()
         }
+    }
+
+    /// Переключает провайдера, сохраняя чат, и повторяет последний запрос.
+    private func switchToOtherProvider() {
+        guard let settings else { return }
+
+        let next = provider.other
+        settings.assistantProvider = next
+        settings.assistantModelName = next.defaultModel
+        try? context.save()
+
+        refreshKey()
+        errorText = nil
+        showBilling = false
+        quotaProvider = nil
+
+        Haptics.select()
+
+        guard hasKey else {
+            errorText = "Провайдер переключён на \(next.title). Добавьте ключ \(next.keyName), чтобы продолжить."
+            return
+        }
+
+        guard let prompt = failedPrompt, let system = failedSystem else { return }
+
+        let history = failedHistory
+        failedPrompt = nil
+        failedHistory = []
+        failedSystem = nil
+
+        startReply(prompt: prompt, history: history, system: system)
     }
 
     private func clear() {
@@ -370,6 +538,10 @@ struct AssistantView: View {
         try? context.save()
         errorText = nil
         showBilling = false
+        quotaProvider = nil
+        failedPrompt = nil
+        failedHistory = []
+        failedSystem = nil
         Haptics.warning()
     }
 }

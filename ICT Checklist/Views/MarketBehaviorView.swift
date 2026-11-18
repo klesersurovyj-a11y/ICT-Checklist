@@ -31,7 +31,7 @@ struct MarketBehaviorView: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     backButton
                         .reveal(.slideLeft)
                     header
@@ -165,7 +165,7 @@ struct MarketBehaviorView: View {
                 insightRow(insight)
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -217,7 +217,7 @@ struct MarketBehaviorView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -317,7 +317,7 @@ struct MarketBehaviorView: View {
                 Haptics.tap()
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -333,7 +333,7 @@ struct MarketBehaviorView: View {
 
             InfoHint(text: "Сделки без цикла и без метки попадают в группу «Без метки» — разметьте их в карточке сделки, и они войдут в анализ.")
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 

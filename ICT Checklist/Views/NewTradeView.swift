@@ -8,9 +8,11 @@ import SwiftData
 
 struct NewTradeView: View {
     let prefillTrade: Trade?
+    let prefill: NewTradePrefill?
 
-    init(prefillTrade: Trade? = nil) {
+    init(prefillTrade: Trade? = nil, prefill: NewTradePrefill? = nil) {
         self.prefillTrade = prefillTrade
+        self.prefill = prefill
     }
 
     @Environment(\.modelContext) private var context
@@ -109,13 +111,19 @@ struct NewTradeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: prefillTrade == nil ? "Вручную" : "Дубликат сделки")
+            SectionLabel(text: sourceLabel)
             ScreenTitle(text: "Новая сделка")
             Text(headerSubtitle)
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var sourceLabel: String {
+        if prefillTrade != nil { return "Дубликат сделки" }
+        if prefill != nil { return "Из калькулятора" }
+        return "Вручную"
     }
 
     private var headerSubtitle: String {
@@ -504,6 +512,13 @@ struct NewTradeView: View {
         guard !didLoad else { return }
         didLoad = true
 
+        stepIndex = min(max(ladderList.first?.stepIndex ?? 0, 0), 2)
+        risk = amounts[stepIndex]
+        symbol = symbols.first ?? "EURUSD"
+        if accounts.count == 1 {
+            account = accounts.first
+        }
+
         if let source = prefillTrade {
             symbol = source.symbol
             direction = source.direction
@@ -511,17 +526,18 @@ struct NewTradeView: View {
             risk = source.riskUSD
             structure = source.explicitStructure
             poi = source.explicitPOI
-            if accounts.count == 1 {
-                account = accounts.first
-            }
             return
         }
 
-        stepIndex = min(max(ladderList.first?.stepIndex ?? 0, 0), 2)
-        risk = amounts[stepIndex]
-        symbol = symbols.first ?? "EURUSD"
-        if accounts.count == 1 {
-            account = accounts.first
+        if let prefill {
+            entry = prefill.entry
+            stop = prefill.stop
+            takeProfit = prefill.takeProfit
+            risk = prefill.riskUSD
+            direction = prefill.stop <= prefill.entry ? .long : .short
+            if let value = prefill.symbol, !value.isEmpty {
+                symbol = value
+            }
         }
     }
 
@@ -552,6 +568,17 @@ struct NewTradeView: View {
         Haptics.success()
         dismiss()
     }
+}
+
+// MARK: - Prefill from the position calculator
+
+struct NewTradePrefill: Identifiable {
+    let id = UUID()
+    var entry: Double
+    var stop: Double
+    var takeProfit: Double
+    var riskUSD: Double
+    var symbol: String?
 }
 
 // MARK: - Inline numeric field

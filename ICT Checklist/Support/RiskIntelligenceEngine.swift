@@ -375,10 +375,7 @@ enum RiskIntelligenceEngine {
     private static func equityByAccount(_ accounts: [TradingAccount]) -> [PersistentIdentifier: Double] {
         var map: [PersistentIdentifier: Double] = [:]
         for account in accounts {
-            let moneyResult = account.trades
-                .filter { $0.result != .open }
-                .reduce(0) { $0 + $1.riskUSD * $1.actualR }
-            map[account.persistentModelID] = account.balance + moneyResult
+            map[account.persistentModelID] = account.equity
         }
         return map
     }

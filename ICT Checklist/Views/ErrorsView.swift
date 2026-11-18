@@ -23,6 +23,7 @@ struct ErrorsView: View {
     @State private var photoTarget: ErrorNote?
     @State private var showPhotoPicker = false
     @State private var pickedItems: [PhotosPickerItem] = []
+    @State private var summaryNote: ErrorNote?
 
     private var usedTags: [String] {
         Array(Set(trades.flatMap { $0.tags })).sorted()
@@ -47,6 +48,10 @@ struct ErrorsView: View {
                         .reveal(.drop)
                     tiles
                         .reveal(.zoom, 1)
+                    if !notes.isEmpty {
+                        summaryCard
+                            .reveal(.rise, 2)
+                    }
                     statusRow
                         .reveal(.blur, 2)
 
@@ -103,6 +108,13 @@ struct ErrorsView: View {
         }
         .fullScreenCover(item: $selectedTrade) { trade in
             TradeDetailView(trade: trade, usedTags: usedTags)
+        }
+        .sheet(item: $summaryNote) { note in
+            ErrorTradesSheet(note: note, usedTags: usedTags)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+                .presentationCornerRadius(32)
         }
         .photosPicker(
             isPresented: $showPhotoPicker,
@@ -200,6 +212,160 @@ struct ErrorsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(13)
         .glassCard(cornerRadius: 16)
+    }
+
+    // MARK: - Summary
+
+    private var stats: [ErrorStat] {
+        notes.map { note in
+            let closed = note.trades.filter { $0.result != .open }
+            let lastDate = note.trades
+                .map { $0.closedAt ?? $0.tradingDay }
+                .max()
+            return ErrorStat(
+                note: note,
+                closed: closed.count,
+                totalR: note.totalR,
+                lastDate: lastDate
+            )
+        }
+    }
+
+    private var sortedStats: [ErrorStat] {
+        stats.sorted { left, right in
+            if abs(left.totalR - right.totalR) > 0.0001 {
+                return left.totalR < right.totalR
+            }
+            return (left.lastDate ?? .distantPast) > (right.lastDate ?? .distantPast)
+        }
+    }
+
+    private var costliestStat: ErrorStat? {
+        stats.filter { $0.closed > 0 }.min { $0.totalR < $1.totalR }
+    }
+
+    private var mostRepeatedStat: ErrorStat? {
+        stats.filter { $0.closed > 0 }.max { $0.closed < $1.closed }
+    }
+
+    private var summaryCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                SectionLabel(text: "Сводка по ошибкам")
+                Spacer(minLength: 8)
+                Text("по стоимости в R")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            HStack(spacing: 10) {
+                summaryTile(
+                    title: "Самая дорогая",
+                    value: costliestStat.map { Fmt.r($0.totalR) } ?? "—",
+                    subtitle: costliestStat?.note.title ?? "Нет сделок",
+                    tint: Theme.red
+                )
+                summaryTile(
+                    title: "Повторяется",
+                    value: mostRepeatedStat.map { "\($0.closed)" } ?? "—",
+                    subtitle: mostRepeatedStat?.note.title ?? "Нет сделок",
+                    tint: Theme.orange
+                )
+            }
+
+            VStack(spacing: 0) {
+                ForEach(Array(sortedStats.enumerated()), id: \.element.id) { index, stat in
+                    Button {
+                        summaryNote = stat.note
+                        Haptics.tap()
+                    } label: {
+                        summaryRow(stat)
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < sortedStats.count - 1 {
+                        Divider().overlay(Theme.hairline)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .glassCard(cornerRadius: 18)
+        }
+    }
+
+    private func summaryTile(
+        title: String,
+        value: String,
+        subtitle: String,
+        tint: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(subtitle)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(13)
+        .glassCard(cornerRadius: 16)
+    }
+
+    private func summaryRow(_ stat: ErrorStat) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.07))
+                    .frame(width: 32, height: 32)
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(stat.note.title)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(metaLine(stat))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            Spacer(minLength: 6)
+
+            Text(Fmt.r(stat.totalR))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(rColor(stat.totalR))
+                .lineLimit(1)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    private func metaLine(_ stat: ErrorStat) -> String {
+        let trades = stat.closed == 0
+            ? "нет закрытых сделок"
+            : Fmt.deals(stat.closed)
+        guard let lastDate = stat.lastDate else { return trades }
+        return "\(trades) · последняя \(Fmt.shortDay(lastDate))"
     }
 
     private var statusRow: some View {
@@ -732,5 +898,182 @@ private struct ErrorEditorSheet: View {
         case .fixed: return Theme.green
         case .repeated: return Theme.red
         }
+    }
+}
+
+
+
+// MARK: - Summary model
+
+private struct ErrorStat: Identifiable {
+    let note: ErrorNote
+    let closed: Int
+    let totalR: Double
+    let lastDate: Date?
+
+    var id: PersistentIdentifier { note.id }
+}
+
+// MARK: - Error trades sheet
+
+private struct ErrorTradesSheet: View {
+    let note: ErrorNote
+    let usedTags: [String]
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selectedTrade: Trade?
+
+    private var trades: [Trade] {
+        note.trades.sorted { ($0.closedAt ?? $0.tradingDay) > ($1.closedAt ?? $1.tradingDay) }
+    }
+
+    private var tint: Color {
+        switch note.status {
+        case .awaiting: return Theme.orange
+        case .fixed: return Theme.green
+        case .repeated: return Theme.red
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            AppBackground()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 14) {
+                    header
+                    summary
+                    tradeList
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 28)
+            }
+        }
+        .fullScreenCover(item: $selectedTrade) { trade in
+            TradeDetailView(trade: trade, usedTags: usedTags)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                SectionLabel(text: "Ошибка")
+                Text(note.title)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 34, height: 34)
+                    .glassCircle()
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var summary: some View {
+        HStack(spacing: 8) {
+            Text(note.status.rawValue)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(tint.opacity(0.14)))
+                .overlay(Capsule().strokeBorder(tint.opacity(0.32), lineWidth: 1))
+
+            Text("\(Fmt.deals(trades.count)) · \(Fmt.r(note.totalR))")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+        }
+    }
+
+    @ViewBuilder
+    private var tradeList: some View {
+        if trades.isEmpty {
+            Text("К этой ошибке не прикреплено ни одной сделки.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .glassCard(cornerRadius: 20)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(trades.enumerated()), id: \.element.id) { index, trade in
+                    Button {
+                        selectedTrade = trade
+                        Haptics.tap()
+                    } label: {
+                        tradeRow(trade)
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < trades.count - 1 {
+                        Divider().overlay(Theme.hairline)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .glassCard(cornerRadius: 18)
+        }
+    }
+
+    private func tradeRow(_ trade: Trade) -> some View {
+        HStack(spacing: 8) {
+            Text(Fmt.shortDay(trade.tradingDay))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textTertiary)
+                .lineLimit(1)
+
+            Text(trade.symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Text(trade.result.rawValue)
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundStyle(resultTint(trade.result))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(resultTint(trade.result).opacity(0.16)))
+
+            Spacer(minLength: 6)
+
+            Text(trade.result == .open ? "—" : Fmt.r(trade.actualR))
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(rColor(trade.actualR))
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    private func resultTint(_ result: TradeResult) -> Color {
+        switch result {
+        case .tp: return Theme.green
+        case .sl: return Theme.red
+        case .be: return Theme.orange
+        case .open: return Theme.textSecondary
+        }
+    }
+
+    private func rColor(_ value: Double) -> Color {
+        if value > 0.05 { return Theme.green }
+        if value < -0.05 { return Theme.red }
+        return Theme.textSecondary
     }
 }

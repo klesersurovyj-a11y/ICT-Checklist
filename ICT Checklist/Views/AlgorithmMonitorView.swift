@@ -39,7 +39,7 @@ private struct AlgorithmMonitorContent: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     backButton
                         .reveal(.slideLeft)
                     header
@@ -188,7 +188,7 @@ private struct AlgorithmMonitorContent: View {
                 signalRow(signal)
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -262,7 +262,7 @@ private struct AlgorithmMonitorContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -551,7 +551,7 @@ private struct AlgorithmMonitorContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -644,7 +644,7 @@ private struct AlgorithmMonitorContent: View {
                 )
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -726,7 +726,7 @@ private struct AlgorithmMonitorContent: View {
                 Haptics.tap()
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -742,7 +742,7 @@ private struct AlgorithmMonitorContent: View {
 
             InfoHint(text: "Окна 40 и 100 показывают, как те же метрики выглядят на длинной дистанции — просадка на 20 при сильных 100 чаще оказывается шумом.")
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 

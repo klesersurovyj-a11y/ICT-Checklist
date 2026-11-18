@@ -12,10 +12,16 @@ struct ContentView: View {
 
     @ObservedObject private var router = NotificationRouter.shared
 
+    @Query private var existingTrades: [Trade]
+    @Query private var existingPlans: [TradePlan]
+
+    @AppStorage("onboarding.completed") private var onboardingCompleted = false
+
     @State private var selection = 0
     @State private var revealTick = 0
     @State private var showGoal = false
     @State private var showWeekPlan = false
+    @State private var showOnboarding = false
 
     var body: some View {
         TabView(selection: $selection) {
@@ -42,7 +48,9 @@ struct ContentView: View {
             revealTick += 1
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active, revealTick > 0 else { return }
+            guard phase == .active else { return }
+            CycleActivityController.shared.sync(context: context)
+            guard revealTick > 0 else { return }
             revealTick += 1
         }
         .onChange(of: router.goalRequestTick) { _, _ in
@@ -79,12 +87,29 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showWeekPlan) {
             WeekPlanView()
         }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView()
+        }
+        .onChange(of: onboardingCompleted) { _, done in
+            if done {
+                showOnboarding = false
+            }
+        }
         .task {
+            if !onboardingCompleted {
+                if existingTrades.isEmpty && existingPlans.isEmpty {
+                    showOnboarding = true
+                } else {
+                    // В базе уже есть записи — значит это не первый запуск.
+                    onboardingCompleted = true
+                }
+            }
             NotificationRouter.shared.install()
             GoalReminder.check(context: context)
             JournalReminder.refresh(context: context)
             DailyLimitReminder.check(context: context)
             WeekPlanReminder.refresh(context: context)
+            CycleActivityController.shared.sync(context: context)
         }
     }
 }

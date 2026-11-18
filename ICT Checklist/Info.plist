@@ -14,6 +14,10 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID защищает доступ к вашим сделкам, планам и заметкам, когда приложение возвращается из фона.</string>
 	<key>UIDeviceFamily</key>
 	<array>
 		<integer>1</integer>

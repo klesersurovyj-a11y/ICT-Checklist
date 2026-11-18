@@ -29,8 +29,8 @@ struct AccountsView: View {
         accounts.reduce(0) { $0 + $1.withdrawalTotal }
     }
 
-    private var allBalance: Double {
-        accounts.reduce(0) { $0 + $1.balance }
+    private var allEquity: Double {
+        accounts.reduce(0) { $0 + $1.equity }
     }
 
     private var monthOperations: [AccountOperation] {
@@ -46,7 +46,7 @@ struct AccountsView: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     topBar
                         .reveal(.slideLeft)
                     summaryTiles
@@ -184,7 +184,7 @@ struct AccountsView: View {
 
     private var summaryTiles: some View {
         HStack(spacing: 10) {
-            tile("Баланс", money(allBalance, "USD"), tint: Theme.textPrimary)
+            tile("Капитал", money(allEquity, "USD"), tint: allEquity < 0 ? Theme.red : Theme.textPrimary)
             tile("Выплаты", money(allPayouts, "USD"), tint: Theme.green)
             tile("Выводы", money(allWithdrawals, "USD"), tint: Theme.orange)
             tile("Счетов", "\(accounts.count)", tint: Theme.textSecondary)
@@ -267,12 +267,37 @@ struct AccountsView: View {
     }
 
     private func makeBalanceSeries(for account: TradingAccount) -> BalanceSeries? {
-        let operations = account.operations.sorted { $0.date < $1.date }
-        guard !operations.isEmpty else { return nil }
+        struct BalanceEvent {
+            let id: String
+            let date: Date
+            let amount: Double
+        }
+
+        var events: [BalanceEvent] = []
+
+        for (index, operation) in account.operations.enumerated() {
+            events.append(
+                BalanceEvent(id: "op-\(index)", date: operation.date, amount: operation.signedAmount)
+            )
+        }
+
+        for trade in account.trades where trade.result != .open {
+            events.append(
+                BalanceEvent(
+                    id: "trade-\(trade.persistentModelID)",
+                    date: trade.closedAt ?? trade.entryDate,
+                    amount: trade.moneyResult
+                )
+            )
+        }
+
+        guard !events.isEmpty || abs(account.startingBalance) > 0.0001 else { return nil }
+
+        events.sort { $0.date < $1.date }
 
         let calendar = Calendar.current
         var startDate = calendar.startOfDay(for: account.createdAt)
-        if let first = operations.first?.date, first < startDate {
+        if let first = events.first?.date, first < startDate {
             startDate = calendar.startOfDay(for: first)
         }
 
@@ -281,9 +306,9 @@ struct AccountsView: View {
         ]
         var running = account.startingBalance
 
-        for (index, operation) in operations.enumerated() {
-            running += operation.signedAmount
-            points.append(BalancePoint(id: "op-\(index)", date: operation.date, value: running))
+        for event in events {
+            running += event.amount
+            points.append(BalancePoint(id: event.id, date: event.date, value: running))
         }
 
         return BalanceSeries(
@@ -304,13 +329,13 @@ struct AccountsView: View {
     private var balancesCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                SectionLabel(text: "Балансы")
+                SectionLabel(text: "Динамика капитала")
                 Spacer(minLength: 8)
                 balanceMenu
             }
 
             if balanceSeries.isEmpty {
-                Text("Пока нет операций — баланс не менялся")
+                Text("Пока нет операций и закрытых сделок — капитал не менялся")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -323,14 +348,14 @@ struct AccountsView: View {
                 .overlay(Color.white.opacity(0.06))
 
             HStack(spacing: 8) {
-                Text("Итого на счетах")
+                Text("Итого капитал")
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer(minLength: 8)
-                Text(money(allBalance, "USD"))
+                Text(money(allEquity, "USD"))
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(allBalance < 0 ? Theme.red : Theme.textPrimary)
+                    .foregroundStyle(allEquity < 0 ? Theme.red : Theme.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -393,7 +418,7 @@ struct AccountsView: View {
                 ForEach(series.points) { point in
                     LineMark(
                         x: .value("Дата", point.date),
-                        y: .value("Баланс", point.value),
+                        y: .value("Капитал", point.value),
                         series: .value("Счёт", series.name)
                     )
                     .foregroundStyle(series.color)
@@ -497,22 +522,22 @@ struct AccountsView: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Баланс")
+                    Text("Капитал")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
-                    Text(money(account.balance, account.currency))
+                    Text(money(account.equity, account.currency))
                         .font(.system(size: 26, weight: .semibold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(account.balance < 0 ? Theme.red : Theme.textPrimary)
+                        .foregroundStyle(account.equity < 0 ? Theme.red : Theme.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                 }
                 Spacer(minLength: 8)
-                Text("начальный \(money(account.startingBalance, account.currency))")
+                Text("баланс \(money(account.balance, account.currency)) · сделки \(signedMoney(account.tradeProfit, account.currency))")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.7)
             }
 
             HStack(spacing: 8) {
@@ -739,6 +764,11 @@ struct AccountsView: View {
         formatter.maximumFractionDigits = value == value.rounded() ? 0 : 2
         let text = formatter.string(from: NSNumber(value: abs(value))) ?? String(format: "%.0f", abs(value))
         return "\(currency) \(text)"
+    }
+
+    private func signedMoney(_ value: Double, _ currency: String) -> String {
+        let sign = value > 0.005 ? "+" : (value < -0.005 ? "\u{2212}" : "")
+        return sign + money(abs(value), currency)
     }
 }
 

@@ -6,21 +6,23 @@
 import Foundation
 
 enum AssistantError: LocalizedError {
-    case missingKey
-    case quota
-    case network(String)
-    case server(String)
+    case missingKey(AssistantProvider)
+    case quota(AssistantProvider)
+    case network(AssistantProvider, String)
+    case server(AssistantProvider, String)
     case emptyAnswer
 
     var errorDescription: String? {
         switch self {
-        case .missingKey:
-            return "Нужен ключ OpenAI (OPENAI_API_KEY) — без него ассистент не может ответить."
-        case .quota:
-            return "OpenAI вернул insufficient_quota: на ключе закончился баланс или квота. Это ограничение аккаунта OpenAI, а не приложения. Пополните баланс в Settings → Billing на platform.openai.com или создайте новый ключ в проекте с ненулевым балансом и вставьте его в приложение."
-        case .network(let message):
-            return message
-        case .server(let message):
+        case .missingKey(let provider):
+            return "Нужен ключ \(provider.title) (\(provider.keyName)) — без него ассистент не может ответить. Добавьте его в настройках ключей приложения."
+        case .quota(let provider):
+            return "\(provider.title) вернул ошибку квоты: на ключе закончился баланс или лимит. Это ограничение аккаунта \(provider.title), а не приложения. Пополните баланс или переключитесь на второго провайдера — история чата сохранится."
+        case .network(let provider, let message):
+            return message.isEmpty
+                ? "Нет связи с \(provider.title)."
+                : "Нет связи с \(provider.title): \(message)"
+        case .server(_, let message):
             return message
         case .emptyAnswer:
             return "Модель вернула пустой ответ. Попробуйте ещё раз."
@@ -31,6 +33,17 @@ enum AssistantError: LocalizedError {
         if case .quota = self { return true }
         return false
     }
+
+    /// Провайдер, у которого закончилась квота, — чтобы предложить второго.
+    var quotaProvider: AssistantProvider? {
+        if case .quota(let provider) = self { return provider }
+        return nil
+    }
+
+    var isMissingKey: Bool {
+        if case .missingKey = self { return true }
+        return false
+    }
 }
 
 struct AssistantTurn {
@@ -38,16 +51,26 @@ struct AssistantTurn {
     let text: String
 }
 
+struct AssistantReply {
+    let text: String
+    let provider: AssistantProvider
+    let model: String
+    let cost: Double?
+}
+
 enum AssistantService {
-    static let model = "gpt-4o-mini"
+    static func reply(
+        provider: AssistantProvider,
+        model: String,
+        system: String,
+        history: [AssistantTurn],
+        prompt: String
+    ) async throws -> AssistantReply {
+        let key = (ApiKeyManager.shared.get(key: provider.keyName) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-    static let billingURL = URL(string: "https://platform.openai.com/settings/organization/billing/overview")!
-
-    private static let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
-
-    static func reply(system: String, history: [AssistantTurn], prompt: String) async throws -> String {
-        guard let key = ApiKeyManager.shared.get(key: "OPENAI_API_KEY"), !key.isEmpty else {
-            throw AssistantError.missingKey
+        guard !key.isEmpty else {
+            throw AssistantError.missingKey(provider)
         }
 
         var messages: [[String: String]] = [["role": "system", "content": system]]
@@ -56,18 +79,28 @@ enum AssistantService {
         }
         messages.append(["role": "user", "content": prompt])
 
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "model": model,
             "temperature": 0.6,
             "max_tokens": 1200,
             "messages": messages
         ]
 
-        var request = URLRequest(url: endpoint)
+        // OpenRouter присылает стоимость ответа в usage.cost.
+        if provider == .openRouter {
+            payload["usage"] = ["include": true]
+        }
+
+        var request = URLRequest(url: provider.chatEndpoint)
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+
+        if provider == .openRouter {
+            request.setValue("ICT Checklist", forHTTPHeaderField: "X-Title")
+        }
+
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
 
         let data: Data
@@ -75,29 +108,30 @@ enum AssistantService {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
-            throw AssistantError.network("Нет связи с OpenAI: \(error.localizedDescription)")
+            throw AssistantError.network(provider, error.localizedDescription)
         }
 
         guard let http = response as? HTTPURLResponse else {
-            throw AssistantError.network("Не удалось прочитать ответ OpenAI.")
+            throw AssistantError.network(provider, "не удалось прочитать ответ.")
         }
 
+        let info = apiError(data)
+
         guard (200..<300).contains(http.statusCode) else {
-            let info = apiError(data)
+            if isQuota(status: http.statusCode, info: info) {
+                throw AssistantError.quota(provider)
+            }
 
             if http.statusCode == 429 {
-                if info.code == "insufficient_quota"
-                    || info.message.localizedCaseInsensitiveContains("quota")
-                    || info.message.localizedCaseInsensitiveContains("billing") {
-                    throw AssistantError.quota
-                }
                 throw AssistantError.server(
-                    "OpenAI: превышен лимит запросов. Подождите минуту и попробуйте снова."
+                    provider,
+                    "\(provider.title): превышен лимит запросов. Подождите минуту и попробуйте снова."
                 )
             }
 
             throw AssistantError.server(
-                serverMessage(status: http.statusCode, detail: info.message)
+                provider,
+                serverMessage(provider: provider, status: http.statusCode, detail: info.message)
             )
         }
 
@@ -108,21 +142,51 @@ enum AssistantService {
                 }
                 let message: Message
             }
+            struct Usage: Decodable {
+                let cost: Double?
+                let totalCost: Double?
+
+                enum CodingKeys: String, CodingKey {
+                    case cost
+                    case totalCost = "total_cost"
+                }
+            }
             let choices: [Choice]
+            let usage: Usage?
         }
 
         let decoded: ChatResponse
         do {
             decoded = try JSONDecoder().decode(ChatResponse.self, from: data)
         } catch {
-            throw AssistantError.network("Не удалось разобрать ответ OpenAI.")
+            throw AssistantError.network(provider, "не удалось разобрать ответ.")
         }
 
         let answer = decoded.choices.first?.message.content?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         guard !answer.isEmpty else { throw AssistantError.emptyAnswer }
-        return answer
+
+        return AssistantReply(
+            text: answer,
+            provider: provider,
+            model: model,
+            cost: decoded.usage?.cost ?? decoded.usage?.totalCost
+        )
+    }
+
+    // MARK: - Errors
+
+    private static func isQuota(status: Int, info: (code: String, message: String)) -> Bool {
+        if status == 402 { return true }
+
+        guard status == 429 || status == 403 else { return false }
+
+        let text = info.message.lowercased()
+        return info.code == "insufficient_quota"
+            || text.contains("quota")
+            || text.contains("billing")
+            || text.contains("credit")
     }
 
     private static func apiError(_ data: Data) -> (code: String, message: String) {
@@ -138,16 +202,20 @@ enum AssistantService {
         )
     }
 
-    private static func serverMessage(status: Int, detail: String) -> String {
+    private static func serverMessage(
+        provider: AssistantProvider,
+        status: Int,
+        detail: String
+    ) -> String {
         switch status {
         case 401:
-            return "OpenAI не принял ключ. Проверьте значение OPENAI_API_KEY."
+            return "\(provider.title) не принял ключ. Проверьте значение \(provider.keyName)."
         case 403:
-            return "OpenAI запретил запрос для этого ключа."
+            return "\(provider.title) запретил запрос для этого ключа."
         case 400...499:
-            return "OpenAI отклонил запрос. \(detail.isEmpty ? "Код \(status)." : detail)"
+            return "\(provider.title) отклонил запрос. \(detail.isEmpty ? "Код \(status)." : detail)"
         default:
-            return "OpenAI ответил ошибкой \(status). \(detail.isEmpty ? "Попробуйте позже." : detail)"
+            return "\(provider.title) ответил ошибкой \(status). \(detail.isEmpty ? "Попробуйте позже." : detail)"
         }
     }
 }

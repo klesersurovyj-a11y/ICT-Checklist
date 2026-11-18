@@ -10,7 +10,9 @@ import SwiftData
 struct ICT_ChecklistApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppLockGate {
+                ContentView()
+            }
         }
         .modelContainer(AppContainer.shared)
     }

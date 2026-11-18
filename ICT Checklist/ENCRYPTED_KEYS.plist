@@ -4,6 +4,8 @@
 <dict>
 	<key>OPENAI_API_KEY</key>
 	<string>4PSjeqI9r0VeoZ6gIfbNydOhHx8BunLfs2jen2tPpBDNUqhIWK/Nnw2KpPgakDgpfKioR//lhGavklHEFyUnYLZrVA2r+9l/d5KRxL//052Ii0Uo+tudZ0QEInZ03JrXlEp1EPoJWGgbRLNHnFVljqrlm720upJrvrnXZ8TrF7TWextwWqnMESmfgmG3qCf5eKNgd6Up+aBeb31YcbGqmVpTy8Am5hkdQtKI9pndiBBryXn9UIgu0hs/YHrDqktk</string>
+	<key>OPENROUTER_API_KEY</key>
+	<string>IbbYYq3EDvPR0eMIJNr/KHwMCpw+JcIDB4RsagwR8P6O8Tcf3cLOSBtfKJpdNJDqfHVTclEtu2m9wPVcuqNv9975uUSqnRmEkztd9XVzjTCUeUvl8gfiAOEDx7jHDeP7XnhIGFQ=</string>
 	<key>TWELVE_DATA_API_KEY</key>
 	<string>PudCou39ShIe0oCEpfSkujsOp6O7YV+5mY6tb0b6h/Wtv+B78ekxS7BJSsspwsPr/BfXzvnY/ijlZtOj</string>
 </dict>

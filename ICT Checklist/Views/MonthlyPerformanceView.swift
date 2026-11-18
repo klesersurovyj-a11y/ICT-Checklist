@@ -53,7 +53,7 @@ private struct MonthlyPerformanceContent: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     backButton
                         .reveal(.slideLeft)
                     header
@@ -326,7 +326,7 @@ private struct MonthlyPerformanceContent: View {
                 .padding(.vertical, 3)
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -356,7 +356,7 @@ private struct MonthlyPerformanceContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -382,7 +382,7 @@ private struct MonthlyPerformanceContent: View {
                 SummaryTable(items: riskItems)
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -497,7 +497,7 @@ private struct MonthlyPerformanceContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -541,7 +541,7 @@ private struct MonthlyPerformanceContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -604,7 +604,7 @@ private struct MonthlyPerformanceContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -630,7 +630,7 @@ private struct MonthlyPerformanceContent: View {
                 Haptics.tap()
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -646,7 +646,7 @@ private struct MonthlyPerformanceContent: View {
 
             InfoHint(text: "Асимметрия и риск: средний TP против среднего SL, превышения лимита и расхождения со ступенью лестницы. Оценка месяца — сумма пяти блоков по 20 баллов.")
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 

@@ -37,7 +37,7 @@ private struct RiskIntelligenceContent: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     backButton
                         .reveal(.slideLeft)
                     header
@@ -327,7 +327,7 @@ private struct RiskIntelligenceContent: View {
                 )
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -415,7 +415,7 @@ private struct RiskIntelligenceContent: View {
                 limitBlock(weekly)
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -576,7 +576,7 @@ private struct RiskIntelligenceContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -639,7 +639,7 @@ private struct RiskIntelligenceContent: View {
                 }
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -714,7 +714,7 @@ private struct RiskIntelligenceContent: View {
                 Haptics.tap()
             }
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 
@@ -745,7 +745,7 @@ private struct RiskIntelligenceContent: View {
 
             InfoHint(text: "Просадка — падение от пика капитала по закрытым сделкам, в R и в процентах. Лимиты берутся из настроек, неделя начинается с понедельника.")
         }
-        .padding(16)
+        .padding(14)
         .glassCard(cornerRadius: 22)
     }
 }

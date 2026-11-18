@@ -56,6 +56,11 @@ final class AppSettings {
     /// Скрытые плитки «Разбора недели»: идентификаторы через запятую.
     var hiddenReviewTilesRaw: String = ""
 
+    /// Провайдер ИИ-ассистента: OpenAI или OpenRouter.
+    var assistantProviderRaw: String = AssistantProvider.openAI.rawValue
+    /// Модель выбранного провайдера.
+    var assistantModelName: String = AssistantProvider.openAI.defaultModel
+
     init(symbolsRaw: String = "EURUSD,GBPUSD,XAUUSD",
          minRR: Double = 2.0,
          ladder1: Double = 12,
@@ -90,6 +95,11 @@ final class AppSettings {
 
     var ladderAmounts: [Double] {
         [ladder1, ladder2, ladder3]
+    }
+
+    var assistantProvider: AssistantProvider {
+        get { AssistantProvider(rawValue: assistantProviderRaw) ?? .openAI }
+        set { assistantProviderRaw = newValue.rawValue }
     }
 
     func ladderAmount(at index: Int) -> Double {

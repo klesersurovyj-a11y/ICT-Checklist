@@ -60,6 +60,8 @@ final class TradingAccount {
     var createdAt: Date = Date()
     var isArchived: Bool = false
     var startingBalance: Double = 0
+    /// Счёт загружен демо-базой и удаляется одной кнопкой в настройках.
+    var isDemo: Bool = false
 
     @Relationship(deleteRule: .cascade, inverse: \AccountOperation.account)
     var operations: [AccountOperation] = []
@@ -79,6 +81,7 @@ final class TradingAccount {
         self.createdAt = .now
         self.isArchived = false
         self.startingBalance = startingBalance
+        self.isDemo = false
         self.operations = []
         self.trades = []
     }
@@ -154,6 +157,18 @@ final class TradingAccount {
 
     var totalR: Double {
         trades.reduce(0) { $0 + $1.actualR }
+    }
+
+    /// Денежный результат закрытых сделок счёта.
+    var tradeProfit: Double {
+        trades
+            .filter { $0.result != .open }
+            .reduce(0) { $0 + $1.moneyResult }
+    }
+
+    /// Реальный капитал счёта: баланс по операциям плюс результат сделок.
+    var equity: Double {
+        balance + tradeProfit
     }
 }
 

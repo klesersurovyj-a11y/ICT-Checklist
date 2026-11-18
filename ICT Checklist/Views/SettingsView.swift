@@ -52,6 +52,7 @@ private struct SettingsContent: View {
     @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
     @Query private var errorNotes: [ErrorNote]
     @Query private var brainNotes: [BrainNote]
+    @Query(sort: \TradePlan.day, order: .reverse) private var plans: [TradePlan]
     @Query private var journalEntries: [JournalEntry]
     @Query private var weekPlans: [WeekPlan]
 
@@ -79,8 +80,11 @@ private struct SettingsContent: View {
     @State private var showBackupAlert = false
     @State private var backupAlertTitle = ""
     @State private var backupAlertMessage = ""
+    @State private var showDemoRemoveAlert = false
+    @State private var showAppLockAlert = false
 
     @StateObject private var sync = SyncStatus.shared
+    @ObservedObject private var appLock = AppLock.shared
 
     private var canDeleteSymbol: Bool {
         settings.symbols.count > 1
@@ -125,6 +129,12 @@ private struct SettingsContent: View {
                     .reveal(.slideLeft, 9)
                 backupCard
                     .reveal(.slideLeft, 10)
+                if demoCount > 0 {
+                    demoCard
+                        .reveal(.slideLeft, 10)
+                }
+                securityCard
+                    .reveal(.slideLeft, 11)
                 syncCard
                     .reveal(.blur, 11)
                 footer
@@ -188,6 +198,20 @@ private struct SettingsContent: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(backupAlertMessage)
+        }
+        .alert("Удалить демо-данные?", isPresented: $showDemoRemoveAlert) {
+            Button("Удалить", role: .destructive) {
+                DemoData.remove(context: context)
+                Haptics.warning()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Исчезнут примерные сделки, планы и заметки, загруженные демо-базой. Ваши собственные записи останутся.")
+        }
+        .alert("Замок включён", isPresented: $showAppLockAlert) {
+            Button("Понятно", role: .cancel) {}
+        } message: {
+            Text("Данные остаются на устройстве и в iCloud. Замок защищает только доступ к приложению: при следующем запуске или возврате из фона понадобится Face ID, Touch ID или код-пароль устройства.")
         }
         .fileImporter(
             isPresented: $showBackupImporter,
@@ -727,45 +751,164 @@ private struct SettingsContent: View {
 
     private var assistantCard: some View {
         settingsCard("ИИ-АССИСТЕНТ") {
-            Button {
-                showAssistant = true
-                Haptics.tap()
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Theme.accent.opacity(0.14))
-                            .frame(width: 34, height: 34)
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Theme.accent)
+            VStack(spacing: 0) {
+                Button {
+                    showAssistant = true
+                    Haptics.tap()
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Theme.accent.opacity(0.14))
+                                .frame(width: 34, height: 34)
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Theme.accent)
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Разбор сделок и системы")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.leading)
+                            Text("TDA + Risk · стиль AlexxxFX и Mordan")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
                     }
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Разбор сделок и системы")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.leading)
-                        Text("TDA + Risk · стиль AlexxxFX и Mordan")
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.textSecondary)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textTertiary)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.045))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                    )
                 }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.045))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
-                )
+                .buttonStyle(.plain)
+
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ПРОВАЙДЕР")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.textTertiary)
+
+                    GlassSegmented(
+                        options: AssistantProvider.allCases,
+                        selection: providerBinding,
+                        label: { $0.title }
+                    )
+
+                    Text(settings.assistantProvider.subtitle)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.vertical, 12)
+
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+
+                assistantModelRow
+
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+
+                assistantKeyRow
+
+                Text("Ключ каждого провайдера хранится отдельно. При ошибке квоты ассистент предложит переключиться на второго — история чата сохранится.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    private var providerBinding: Binding<AssistantProvider> {
+        Binding(
+            get: { settings.assistantProvider },
+            set: { next in
+                guard next != settings.assistantProvider else { return }
+                settings.assistantProvider = next
+                settings.assistantModelName = next.defaultModel
+                save()
+                Haptics.select()
+            }
+        )
+    }
+
+    private var assistantModelRow: some View {
+        Menu {
+            ForEach(settings.assistantProvider.models, id: \.self) { name in
+                Button {
+                    settings.assistantModelName = name
+                    save()
+                    Haptics.select()
+                } label: {
+                    if name == settings.assistantModelName {
+                        Label(name, systemImage: "checkmark")
+                    } else {
+                        Text(name)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("Модель")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.white)
+
+                Spacer(minLength: 8)
+
+                Text(settings.assistantModelName)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Theme.accent)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.vertical, 13)
+            .contentShape(Rectangle())
+        }
+    }
+
+    private var assistantKeyRow: some View {
+        let provider = settings.assistantProvider
+        let hasKey = ApiKeyManager.shared.has(key: provider.keyName)
+
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Ключ \(provider.keyName)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(hasKey ? "добавлен" : "не добавлен")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(hasKey ? Theme.green : Theme.orange)
+            }
+
+            Spacer(minLength: 8)
+
+            Link(destination: provider.keyURL) {
+                Text("Где взять")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+        }
+        .padding(.vertical, 12)
     }
 
     // MARK: - Market behavior
@@ -1451,6 +1594,85 @@ private struct SettingsContent: View {
         .contentShape(Rectangle())
     }
 
+    // MARK: - Demo data
+
+    private var demoCount: Int {
+        trades.filter { $0.isDemo }.count
+            + plans.filter { $0.isDemo }.count
+            + brainNotes.filter { $0.isDemo }.count
+            + accounts.filter { $0.isDemo }.count
+    }
+
+    private var demoCard: some View {
+        settingsCard("ДЕМО-ДАННЫЕ") {
+            VStack(spacing: 0) {
+                Button {
+                    showDemoRemoveAlert = true
+                    Haptics.tap()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Theme.red)
+                        Text("Удалить демо-данные")
+                            .font(.system(size: 17))
+                            .foregroundStyle(.white)
+                        Spacer(minLength: 8)
+                        Text("\(demoCount)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .overlay(Color.white.opacity(0.06))
+
+                Text("Удаляются только записи, загруженные демо-базой при первом запуске. Свои сделки, планы и заметки остаются на месте.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
+            }
+        }
+    }
+
+    // MARK: - Security
+
+    private var securityCard: some View {
+        settingsCard("БЕЗОПАСНОСТЬ") {
+            VStack(spacing: 0) {
+                ToggleRow(
+                    title: "Замок приложения",
+                    subtitle: "Face ID, Touch ID или код-пароль при запуске и возврате из фона",
+                    isOn: appLockBinding
+                )
+
+                Text("Данные остаются на устройстве и в iCloud. Замок защищает только доступ к приложению: он не шифрует базу и не мешает синхронизации.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
+            }
+        }
+    }
+
+    private var appLockBinding: Binding<Bool> {
+        Binding(
+            get: { appLock.isEnabled },
+            set: { value in
+                appLock.setEnabled(value)
+                if value {
+                    showAppLockAlert = true
+                }
+            }
+        )
+    }
+
     // MARK: - Sync
 
     private var syncCard: some View {
@@ -1603,6 +1825,7 @@ private struct SettingsContent: View {
 
     private func save() {
         try? context.save()
+        CycleActivityController.shared.sync(context: context)
     }
 
     private func exportCSV() {

@@ -26,8 +26,23 @@ enum WidgetSnapshot {
         var weekTrades: Int
         var weekWins: Int
         var weekDays: [WeekDay]
+
+        // Цикл дня: необязательные, чтобы старые данные читались без ошибок.
+        var cycleStart: Date?
+        var cycleEnd: Date?
+        var cycleTrades: Int?
+        var cycleMaxTrades: Int?
+        var cycleR: Double?
+        var cycleMaxR: Double?
+        var cycleLimits: Bool?
+        var openSymbol: String?
+        var openDirection: String?
+        var openIsBE: Bool?
+        var openTargetR: Double?
+        var openStopR: Double?
     }
 
+    @MainActor
     static func refresh(context: ModelContext) {
         let states = (try? context.fetch(FetchDescriptor<RiskLadderState>())) ?? []
         let settingsList = (try? context.fetch(FetchDescriptor<AppSettings>())) ?? []
@@ -62,6 +77,8 @@ enum WidgetSnapshot {
             return WeekDay(label: dayLabel(start), r: total)
         }
 
+        let cycle = CycleLiveSnapshot.build(context: context)
+
         let payload = Payload(
             stepIndex: step,
             amount: amount,
@@ -71,7 +88,19 @@ enum WidgetSnapshot {
             weekR: weekR,
             weekTrades: weekTrades.count,
             weekWins: weekWins,
-            weekDays: weekDays
+            weekDays: weekDays,
+            cycleStart: cycle?.cycleStart,
+            cycleEnd: cycle?.cycleEnd,
+            cycleTrades: cycle?.tradesToday,
+            cycleMaxTrades: cycle?.maxTrades,
+            cycleR: cycle?.rToday,
+            cycleMaxR: cycle?.maxLossR,
+            cycleLimits: cycle?.limitsEnabled,
+            openSymbol: cycle?.openSymbol,
+            openDirection: cycle?.openDirection,
+            openIsBE: cycle?.openIsBE,
+            openTargetR: cycle?.toTargetR,
+            openStopR: cycle?.toStopR
         )
 
         guard let data = try? JSONEncoder().encode(payload),

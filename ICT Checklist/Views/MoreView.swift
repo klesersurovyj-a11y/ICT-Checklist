@@ -10,12 +10,17 @@ import SwiftUI
 import SwiftData
 
 private enum MoreDestination: String, Identifiable {
+    case search
+    case charts
     case riskLadder
     case riskIntelligence
+    case calculator
     case monthlyReview
     case weeklyPerformance
     case marketBehavior
     case algorithmMonitor
+    case entryHours
+    case tradeDuration
     case report
     case achievements
 
@@ -70,6 +75,18 @@ struct MoreView: View {
     private var groups: [MoreGroup] {
         [
             MoreGroup(
+                id: "market",
+                title: "Рынок",
+                tiles: [
+                    MoreTile(
+                        destination: .charts,
+                        title: "Графики TradingView",
+                        subtitle: "Инструменты, таймфреймы, разметка",
+                        icon: "chart.xyaxis.line"
+                    )
+                ]
+            ),
+            MoreGroup(
                 id: "risk",
                 title: "Риск",
                 tiles: [
@@ -84,6 +101,12 @@ struct MoreView: View {
                         title: "Risk Intelligence",
                         subtitle: "Риск в R и %, просадка, лимиты",
                         icon: "shield.lefthalf.filled"
+                    ),
+                    MoreTile(
+                        destination: .calculator,
+                        title: "Калькулятор позиции",
+                        subtitle: "Риск, объём и тейк до входа",
+                        icon: "percent"
                     ),
                     MoreTile(
                         destination: .goals,
@@ -120,6 +143,18 @@ struct MoreView: View {
                         title: "Algorithm Monitor",
                         subtitle: "Скользящие метрики и сигнал",
                         icon: "chart.line.uptrend.xyaxis"
+                    ),
+                    MoreTile(
+                        destination: .entryHours,
+                        title: "Часы входа",
+                        subtitle: "Тепловая карта R по дням и часам",
+                        icon: "square.grid.3x3"
+                    ),
+                    MoreTile(
+                        destination: .tradeDuration,
+                        title: "Время в сделке",
+                        subtitle: "Сколько сделка живёт до результата",
+                        icon: "hourglass"
                     ),
                     MoreTile(
                         destination: .report,
@@ -232,12 +267,13 @@ struct MoreView: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
                     header
+                    searchEntry
                     searchRow
 
                     ForEach(filteredGroups) { group in
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 8) {
                             SectionLabel(text: group.title)
                             groupGrid(group)
                         }
@@ -266,7 +302,7 @@ struct MoreView: View {
     @ViewBuilder
     private func groupGrid(_ group: MoreGroup) -> some View {
         if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 10) {
+            GlassEffectContainer(spacing: 8) {
                 groupTiles(group)
             }
         } else {
@@ -277,10 +313,10 @@ struct MoreView: View {
     private func groupTiles(_ group: MoreGroup) -> some View {
         LazyVGrid(
             columns: [
-                GridItem(.flexible(), spacing: 10),
-                GridItem(.flexible(), spacing: 10)
+                GridItem(.flexible(), spacing: 8),
+                GridItem(.flexible(), spacing: 8)
             ],
-            spacing: 10
+            spacing: 8
         ) {
             ForEach(group.tiles, id: \.destination.rawValue) { tile in
                 SectionTile(
@@ -324,6 +360,47 @@ struct MoreView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    /// Вход в глобальный поиск по всей базе.
+    private var searchEntry: some View {
+        Button {
+            destination = .search
+            Haptics.tap()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.10))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Поиск по базе")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("Сделки, планы, Second Brain, ошибки и дневник")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 6)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .glassCard(cornerRadius: 20, interactive: true)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableButtonStyle())
     }
 
     private var searchRow: some View {
@@ -380,10 +457,16 @@ struct MoreView: View {
     @ViewBuilder
     private func destinationView(_ destination: MoreDestination) -> some View {
         switch destination {
+        case .search:
+            SearchView()
+        case .charts:
+            TradingChartsView()
         case .riskLadder:
             RiskLadderView()
         case .riskIntelligence:
             RiskIntelligenceView()
+        case .calculator:
+            PositionCalculatorView()
         case .monthlyReview:
             MonthlyPerformanceView()
         case .weeklyPerformance:
@@ -392,6 +475,10 @@ struct MoreView: View {
             MarketBehaviorView()
         case .algorithmMonitor:
             AlgorithmMonitorView()
+        case .entryHours:
+            EntryHoursView()
+        case .tradeDuration:
+            TradeDurationView()
         case .report:
             ReportView()
         case .achievements:

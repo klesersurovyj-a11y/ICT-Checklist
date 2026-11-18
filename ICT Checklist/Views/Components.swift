@@ -367,7 +367,7 @@ struct MetricTile: View {
                 .minimumScaleFactor(0.65)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(11)
+        .padding(9)
         .glassPanel(cornerRadius: 12)
     }
 }
@@ -447,7 +447,7 @@ struct SummaryTable: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                .padding(.vertical, 10)
+                .padding(.vertical, 8)
             }
         }
         .padding(.horizontal, 12)
@@ -614,8 +614,8 @@ struct SectionTile: View {
 
                 Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
-            .padding(14)
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+            .padding(12)
             .glassCard(cornerRadius: 20, interactive: true)
             .contentShape(Rectangle())
         }

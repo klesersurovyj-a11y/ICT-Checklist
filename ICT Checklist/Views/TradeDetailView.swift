@@ -22,10 +22,12 @@ struct TradeDetailView: View {
     @State private var showTags = false
     @State private var showClassification = false
     @State private var showReplay = false
+    @State private var showCharts = false
     @State private var showGallery = false
     @State private var showCycle = false
     @State private var showDuplicate = false
     @State private var pickedItems: [PhotosPickerItem] = []
+    @State private var createdNote: BrainNote?
 
     var body: some View {
         ZStack {
@@ -38,6 +40,8 @@ struct TradeDetailView: View {
                     header
                         .reveal(.blur, 1)
                     replayCard
+                        .reveal(.rise, 2)
+                    TradeMiniChartView(trade: trade)
                         .reveal(.rise, 2)
                     accountCard
                         .reveal(.rise, 2)
@@ -54,8 +58,14 @@ struct TradeDetailView: View {
                     noteCard
                         .reveal(.rise, 9)
 
-                    duplicateButton
+                    brainButton
+                        .reveal(.rise, 9)
+
+                    pdfButton
                         .reveal(.rise, 10)
+
+                    duplicateButton
+                        .reveal(.rise, 11)
 
                     if trade.result == .open {
                         PrimaryButton(title: "Закрыть сделку") {
@@ -94,6 +104,9 @@ struct TradeDetailView: View {
         .fullScreenCover(isPresented: $showReplay) {
             TradeReplayView(trade: trade)
         }
+        .fullScreenCover(isPresented: $showCharts) {
+            TradingChartsView(trade: trade)
+        }
         .fullScreenCover(isPresented: $showGallery) {
             ScreenshotsGallery(trade: trade)
         }
@@ -104,6 +117,9 @@ struct TradeDetailView: View {
         }
         .fullScreenCover(isPresented: $showDuplicate) {
             NewTradeView(prefillTrade: trade)
+        }
+        .fullScreenCover(item: $createdNote) { note in
+            BrainNoteView(note: note)
         }
         .onChange(of: pickedItems) { _, items in
             guard !items.isEmpty else { return }
@@ -230,6 +246,18 @@ struct TradeDetailView: View {
                 directionBadge
 
                 Spacer(minLength: 6)
+
+                Button {
+                    showCharts = true
+                    Haptics.tap()
+                } label: {
+                    Image(systemName: "chart.xyaxis.line")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .glassCircle()
+                }
+                .buttonStyle(.plain)
 
                 Text(resultRText)
                     .font(.system(size: 24, weight: .bold, design: .rounded))
@@ -764,6 +792,108 @@ struct TradeDetailView: View {
             .padding(.horizontal, 16)
             .glassCard(cornerRadius: 22)
         }
+    }
+
+    private var brainButton: some View {
+        Button {
+            saveToSecondBrain()
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Сохранить в Second Brain")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("Наблюдение, привязанное к сделке")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassCard(cornerRadius: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func saveToSecondBrain() {
+        let title = "\(trade.symbol) · \(Fmt.shortDay(trade.tradingDay))"
+        let note = BrainNote(kind: .observation, title: title, topic: trade.symbol)
+        note.summary = trade.note.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        context.insert(note)
+        note.attach(trade)
+        try? context.save()
+
+        createdNote = note
+        Haptics.success()
+    }
+
+    private var pdfButton: some View {
+        Button {
+            exportPDF()
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Карточка в PDF")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("Символ, уровни, R и разбор")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassCard(cornerRadius: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func exportPDF() {
+        guard let url = TradeCardPDF.make(trade) else {
+            SharePresenter.presentFailure("Не удалось собрать PDF карточки сделки.")
+            Haptics.warning()
+            return
+        }
+
+        SharePresenter.share([url])
+        Haptics.success()
     }
 
     private func rColor(_ value: Double) -> Color {

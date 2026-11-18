@@ -97,6 +97,9 @@ final class TradePlan {
 
     var checklistRaw: String = ""
 
+    /// План загружен демо-базой и удаляется одной кнопкой в настройках.
+    var isDemo: Bool = false
+
     @Relationship(deleteRule: .cascade, inverse: \PlanPhoto.plan)
     var photos: [PlanPhoto] = []
 
@@ -136,6 +139,7 @@ final class TradePlan {
         self.conclusions = ""
         self.narrative = ""
         self.checklistRaw = ""
+        self.isDemo = false
         self.photos = []
         self.trades = []
     }

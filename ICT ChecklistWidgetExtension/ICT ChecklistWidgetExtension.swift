@@ -5,6 +5,7 @@
 
 import WidgetKit
 import SwiftUI
+import ActivityKit
 
 // MARK: - Shared snapshot
 
@@ -27,6 +28,20 @@ enum WidgetData {
         var weekTrades: Int?
         var weekWins: Int?
         var weekDays: [WeekDay]?
+
+        // Цикл дня: поля необязательные, чтобы старые данные читались без ошибок.
+        var cycleStart: Date?
+        var cycleEnd: Date?
+        var cycleTrades: Int?
+        var cycleMaxTrades: Int?
+        var cycleR: Double?
+        var cycleMaxR: Double?
+        var cycleLimits: Bool?
+        var openSymbol: String?
+        var openDirection: String?
+        var openIsBE: Bool?
+        var openTargetR: Double?
+        var openStopR: Double?
     }
 
     static func load() -> Payload? {
@@ -412,5 +427,533 @@ struct ICT_ChecklistWidgetExtensionBundle: WidgetBundle {
     var body: some Widget {
         NextTradeWidget()
         WeekStatsWidget()
+        CycleWidget()
+        CycleLiveActivity()
+    }
+}
+
+
+
+// MARK: - Cycle activity attributes
+
+/// Повтор объявления из приложения: ActivityKit сопоставляет активность
+/// по имени типа, поэтому обе копии совпадают по полям.
+struct CycleActivityAttributes: ActivityAttributes {
+    var cycleStart: Date
+
+    struct ContentState: Codable, Hashable {
+        var cycleEnd: Date
+        var tradesToday: Int
+        var maxTrades: Int
+        var rToday: Double
+        var maxLossR: Double
+        var limitsEnabled: Bool
+
+        var openSymbol: String?
+        var openDirection: String?
+        var openIsBE: Bool
+        var openPrice: Double?
+        var toTargetR: Double?
+        var toStopR: Double?
+    }
+}
+
+private func cycleRText(_ value: Double?) -> String {
+    guard let value else { return "—" }
+    guard abs(value) >= 0.05 else { return "0.0R" }
+    let sign = value > 0 ? "+" : "\u{2212}"
+    return sign + String(format: "%.1f", abs(value)) + "R"
+}
+
+private func cycleRColor(_ value: Double?) -> Color {
+    guard let value else { return .secondary }
+    if value > 0.05 { return .green }
+    if value < -0.05 { return .red }
+    return .secondary
+}
+
+// MARK: - Lock screen
+
+struct CycleLockScreenView: View {
+    let state: CycleActivityAttributes.ContentState
+
+    private var tradesText: String {
+        state.limitsEnabled ? "\(state.tradesToday)/\(state.maxTrades)" : "\(state.tradesToday)"
+    }
+
+    private var rLeft: Double {
+        max(state.maxLossR + min(state.rToday, 0), 0)
+    }
+
+    private var directionColor: Color {
+        state.openDirection == "LONG" ? .green : .red
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "timer")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                Text("ЦИКЛ")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.4)
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 6)
+
+                countdown
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
+
+            HStack(spacing: 8) {
+                metric(title: "СДЕЛКИ", value: tradesText, tint: .white)
+                metric(title: "R", value: cycleRText(state.rToday), tint: cycleRColor(state.rToday))
+
+                if state.limitsEnabled {
+                    metric(
+                        title: "ДО ЛИМИТА",
+                        value: cycleRText(rLeft),
+                        tint: cycleRColor(rLeft)
+                    )
+                }
+            }
+
+            openRow
+        }
+        .padding(16)
+    }
+
+    @ViewBuilder
+    private var countdown: some View {
+        if state.cycleEnd > .now {
+            Text(timerInterval: Date.now...state.cycleEnd, countsDown: true)
+        } else {
+            Text("цикл закрыт")
+        }
+    }
+
+    private func metric(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+        )
+    }
+
+    @ViewBuilder
+    private var openRow: some View {
+        if let symbol = state.openSymbol {
+            HStack(spacing: 8) {
+                Text(symbol)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text(state.openDirection ?? "")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(directionColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(directionColor.opacity(0.18)))
+
+                if state.openIsBE {
+                    Text("BE")
+                        .font(.system(size: 9.5, weight: .bold))
+                        .foregroundStyle(.orange)
+                }
+
+                Spacer(minLength: 6)
+
+                Text("TP \(cycleRText(state.toTargetR))")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.green)
+
+                Text("SL \(cycleRText(state.toStopR))")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.red)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+        } else {
+            Text("Открытой сделки нет")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+        }
+    }
+}
+
+// MARK: - Live Activity
+
+struct CycleLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: CycleActivityAttributes.self) { context in
+            CycleLockScreenView(state: context.state)
+                .activityBackgroundTint(Color.black.opacity(0.92))
+                .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            let state = context.state
+            let end = max(state.cycleEnd, Date.now)
+
+            return DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Label("ЦИКЛ", systemImage: "timer")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text(timerInterval: Date.now...end, countsDown: true)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+
+                DynamicIslandExpandedRegion(.center) {
+                    Text(summary(state))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+
+                DynamicIslandExpandedRegion(.bottom) {
+                    HStack(spacing: 8) {
+                        Text(state.openSymbol ?? "Открытой сделки нет")
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 6)
+
+                        if state.openSymbol != nil {
+                            Text("TP \(cycleRText(state.toTargetR))")
+                                .foregroundStyle(.green)
+                            Text("SL \(cycleRText(state.toStopR))")
+                                .foregroundStyle(.red)
+                        }
+                    }
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                }
+            } compactLeading: {
+                Image(systemName: "timer")
+                    .foregroundStyle(.white)
+            } compactTrailing: {
+                Text(timerInterval: Date.now...end, countsDown: true)
+                    .monospacedDigit()
+                    .frame(width: 44)
+            } minimal: {
+                Image(systemName: "timer")
+            }
+            .widgetURL(nil)
+            .keylineTint(.white)
+        }
+    }
+
+    private func summary(_ state: CycleActivityAttributes.ContentState) -> String {
+        let trades = state.limitsEnabled
+            ? "сделки \(state.tradesToday)/\(state.maxTrades)"
+            : "сделок \(state.tradesToday)"
+        return "\(trades) · \(cycleRText(state.rToday))"
+    }
+}
+
+// MARK: - Cycle widget entry
+
+struct CycleEntry: TimelineEntry {
+    let date: Date
+    let cycleEnd: Date?
+    let tradesToday: Int
+    let maxTrades: Int
+    let limitsEnabled: Bool
+    let rToday: Double
+    let maxLossR: Double
+    let openSymbol: String?
+    let openDirection: String?
+    let openIsBE: Bool
+    let toTargetR: Double?
+    let toStopR: Double?
+
+    static var empty: CycleEntry {
+        CycleEntry(
+            date: .now,
+            cycleEnd: nil,
+            tradesToday: 0,
+            maxTrades: 2,
+            limitsEnabled: true,
+            rToday: 0,
+            maxLossR: 2,
+            openSymbol: nil,
+            openDirection: nil,
+            openIsBE: false,
+            toTargetR: nil,
+            toStopR: nil
+        )
+    }
+}
+
+// MARK: - Cycle provider
+
+struct CycleProvider: TimelineProvider {
+    func placeholder(in context: Context) -> CycleEntry {
+        CycleEntry(
+            date: .now,
+            cycleEnd: Date().addingTimeInterval(2 * 3600),
+            tradesToday: 1,
+            maxTrades: 2,
+            limitsEnabled: true,
+            rToday: -1,
+            maxLossR: 2,
+            openSymbol: "XAUUSD",
+            openDirection: "LONG",
+            openIsBE: false,
+            toTargetR: 1.8,
+            toStopR: 0.9
+        )
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (CycleEntry) -> Void) {
+        completion(loadEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<CycleEntry>) -> Void) {
+        let entry = loadEntry()
+        let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(900)))
+        completion(timeline)
+    }
+
+    private func loadEntry() -> CycleEntry {
+        guard let payload = WidgetData.load() else { return .empty }
+        return CycleEntry(
+            date: payload.updatedAt,
+            cycleEnd: payload.cycleEnd,
+            tradesToday: payload.cycleTrades ?? 0,
+            maxTrades: payload.cycleMaxTrades ?? 2,
+            limitsEnabled: payload.cycleLimits ?? false,
+            rToday: payload.cycleR ?? 0,
+            maxLossR: payload.cycleMaxR ?? 2,
+            openSymbol: payload.openSymbol,
+            openDirection: payload.openDirection,
+            openIsBE: payload.openIsBE ?? false,
+            toTargetR: payload.openTargetR,
+            toStopR: payload.openStopR
+        )
+    }
+}
+
+// MARK: - Cycle widget view
+
+struct CycleEntryView: View {
+    let entry: CycleEntry
+
+    @Environment(\.widgetFamily) private var family
+
+    private var tradesText: String {
+        entry.limitsEnabled ? "\(entry.tradesToday)/\(entry.maxTrades)" : "\(entry.tradesToday)"
+    }
+
+    private var rLeft: Double {
+        max(entry.maxLossR + min(entry.rToday, 0), 0)
+    }
+
+    private var directionColor: Color {
+        entry.openDirection == "LONG" ? .green : .red
+    }
+
+    var body: some View {
+        Group {
+            if let cycleEnd = entry.cycleEnd, cycleEnd > .now {
+                if family == .systemMedium {
+                    mediumBody(end: cycleEnd)
+                } else {
+                    smallBody(end: cycleEnd)
+                }
+            } else {
+                emptyBody
+            }
+        }
+        .widgetContainerBackground()
+    }
+
+    private func smallBody(end: Date) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("ЦИКЛ ДНЯ")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1.1)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text(timerInterval: Date.now...end, countsDown: true)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+
+            Text("до конца цикла")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 6) {
+                Text("Сделки \(tradesText)")
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Text(cycleRText(entry.rToday))
+                    .foregroundStyle(cycleRColor(entry.rToday))
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+    }
+
+    private func mediumBody(end: Date) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("ЦИКЛ ДНЯ")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Text(timerInterval: Date.now...end, countsDown: true)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+
+                Text("до конца цикла")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 6) {
+                    Text("Сделки \(tradesText)")
+                        .foregroundStyle(.white)
+                    Text("·")
+                        .foregroundStyle(.secondary)
+                    Text(cycleRText(entry.rToday))
+                        .foregroundStyle(cycleRColor(entry.rToday))
+                    if entry.limitsEnabled {
+                        Text("· до лимита \(cycleRText(rLeft))")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .font(.system(size: 11.5, weight: .semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                if let symbol = entry.openSymbol {
+                    HStack(spacing: 6) {
+                        Text(symbol)
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Text(entry.openDirection ?? "")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(directionColor)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(directionColor.opacity(0.18)))
+
+                        if entry.openIsBE {
+                            Text("BE")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.orange)
+                        }
+                    }
+
+                    Text("TP \(cycleRText(entry.toTargetR)) · SL \(cycleRText(entry.toStopR))")
+                        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                } else {
+                    Text("Открытой сделки нет")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var emptyBody: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("ЦИКЛ ДНЯ")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1.1)
+                .foregroundStyle(.secondary)
+
+            Text("Сейчас нет")
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Text("Цикл не идёт")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+// MARK: - Cycle widget
+
+struct CycleWidget: Widget {
+    let kind: String = "com.organizationName.ICT-Checklist.ictchecklistwidgetextension.cycle"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: CycleProvider()) { entry in
+            CycleEntryView(entry: entry)
+        }
+        .configurationDisplayName("Цикл дня")
+        .description("Сколько времени до конца цикла, сделки и R до дневного лимита, открытая сделка.")
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

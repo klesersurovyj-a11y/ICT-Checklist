@@ -90,6 +90,7 @@ enum LadderEngine {
     }
 
     /// Recomputes and persists the ladder state, so it survives relaunch and feeds the checklist.
+    @MainActor
     @discardableResult
     static func sync(context: ModelContext) -> LadderSnapshot {
         let trades = (try? context.fetch(FetchDescriptor<Trade>())) ?? []
@@ -113,7 +114,7 @@ enum LadderEngine {
             try? context.save()
         }
 
-        WidgetSnapshot.refresh(context: context)
+        CycleActivityController.shared.sync(context: context)
 
         return snapshot
     }

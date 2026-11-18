@@ -105,6 +105,8 @@ final class BrainNote {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
     var popularity: Int = 0
+    /// Заметка загружена демо-базой и удаляется одной кнопкой в настройках.
+    var isDemo: Bool = false
 
     @Relationship(deleteRule: .cascade, inverse: \BrainShot.note)
     var photos: [BrainShot] = []
@@ -126,6 +128,7 @@ final class BrainNote {
         self.createdAt = .now
         self.updatedAt = .now
         self.popularity = 0
+        self.isDemo = false
         self.photos = []
         self.trades = []
     }
