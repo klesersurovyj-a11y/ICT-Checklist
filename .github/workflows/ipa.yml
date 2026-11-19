@@ -48,11 +48,16 @@ jobs:
           {
             echo "## Ошибки сборки"
             echo '```'
-            grep -n -E "error:|error:|fatal error" build.log | head -80 || true
+            grep -n -E "error:|fatal error" build.log | head -80 || true
             echo '```'
             echo '### Конец лога'
             tail -60 build.log
           } >> "$GITHUB_STEP_SUMMARY"
+
+          grep -E "error:" build.log | head -10 | while IFS= read -r line; do
+            echo "::error title=Build error::$line"
+          done
+          exit 1
 
 
       - name: Package IPA
