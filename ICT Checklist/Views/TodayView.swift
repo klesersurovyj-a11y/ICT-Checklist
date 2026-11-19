@@ -27,6 +27,10 @@ struct TodayView: View {
     @State private var showWeekPlan = false
     @State private var showWeeklyPerformance = false
     @State private var showMore = false
+    @State private var reviewTarget: Trade?
+    @State private var lastPendingReviews = -1
+
+    @AppStorage("reviews.clearedAt") private var reviewsClearedAt: Double = 0
 
     private var settings: AppSettings? { settingsList.first }
     private var ladder: RiskLadderState? { ladderList.first }
@@ -84,6 +88,14 @@ struct TodayView: View {
         .fullScreenCover(isPresented: $showMore) {
             MoreView(isModal: true)
         }
+        .fullScreenCover(item: $reviewTarget, onDismiss: {
+            syncReviewState()
+        }) { trade in
+            TradeReplayView(trade: trade)
+        }
+        .onChange(of: pendingReviewTrades.count) { _, _ in
+            syncReviewState()
+        }
         .task { bootstrap() }
         .onChange(of: visibleCycle?.resultRaw) { _, _ in
             CycleActivityController.shared.sync(context: context)
@@ -116,6 +128,13 @@ struct TodayView: View {
                         weekSummaryCard
                             .reveal(.rise, 2)
                     }
+                    if !pendingReviewTrades.isEmpty {
+                        reviewsCard
+                            .reveal(.rise, 3)
+                    } else if showReviewsDone {
+                        reviewsDoneCard
+                            .reveal(.rise, 3)
+                    }
                     content
                         .reveal(.rise, 3)
                 }
@@ -140,74 +159,60 @@ struct TodayView: View {
                 Text(headerSubtitle)
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.textSecondary)
+                    .windIn(delay: 0.85)
+                CycleProgressStrip(
+                    startHour: settings?.cycleStartHour ?? 19,
+                    startMinute: settings?.cycleStartMinute ?? 0,
+                    endHour: settings?.cycleEndHour ?? 22,
+                    endMinute: settings?.cycleEndMinute ?? 0
+                )
+                .pieceIn(delay: 0.95)
                 dailyLimitBadge
             }
             Spacer(minLength: 4)
-            HStack(spacing: 6) {
-                Button {
-                    showMore = true
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 34, height: 34)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
 
+            Menu {
                 Button {
                     showWeekPlan = true
                     Haptics.tap()
                 } label: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 34, height: 34)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                    Label("План недели", systemImage: "calendar")
                 }
-                .buttonStyle(.plain)
 
                 Button {
                     showSecondBrain = true
                     Haptics.tap()
                 } label: {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 34, height: 34)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                    Label("Second Brain", systemImage: "brain.head.profile")
                 }
-                .buttonStyle(.plain)
 
                 Button {
                     showLevels = true
                     Haptics.tap()
                 } label: {
-                    Image(systemName: "square.stack.3d.up")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 34, height: 34)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                    Label("Key Levels", systemImage: "square.stack.3d.up")
                 }
-                .buttonStyle(.plain)
+
+                Button {
+                    showMore = true
+                    Haptics.tap()
+                } label: {
+                    Label("Все разделы", systemImage: "square.grid.2x2")
+                }
 
                 Button {
                     showSettings = true
                     Haptics.tap()
                 } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 34, height: 34)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                    Label("Настройки", systemImage: "gearshape")
                 }
-                .buttonStyle(.plain)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 36, height: 36)
+                    .glassCircle()
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
             }
             .padding(.top, 2)
         }
@@ -233,6 +238,149 @@ struct TodayView: View {
             return "\(Fmt.day(draft.day)) · незавершённый цикл"
         }
         return "\(Fmt.day(.now)) · новый цикл"
+    }
+
+    // MARK: - Trade reviews
+
+    private var pendingReviewTrades: [Trade] {
+        let calendar = Calendar.current
+        let from = calendar.date(
+            byAdding: .day,
+            value: -6,
+            to: calendar.startOfDay(for: .now)
+        ) ?? .now
+
+        return trades
+            .filter { trade in
+                guard trade.result != .open else { return false }
+                let closed = trade.closedAt ?? trade.tradingDay
+                guard closed >= from else { return false }
+                return trade.review?.isFilled != true
+            }
+            .sorted { ($0.closedAt ?? $0.tradingDay) > ($1.closedAt ?? $1.tradingDay) }
+    }
+
+    private var showReviewsDone: Bool {
+        guard pendingReviewTrades.isEmpty, reviewsClearedAt > 0 else { return false }
+        let date = Date(timeIntervalSince1970: reviewsClearedAt)
+        return Calendar.current.isDateInToday(date)
+    }
+
+    private var reviewsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "checklist")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                }
+
+                Text("Разборы")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Spacer(minLength: 8)
+
+                Text("\(pendingReviewTrades.count)")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.background)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white))
+            }
+
+            ForEach(pendingReviewTrades, id: \.persistentModelID) { trade in
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(trade.symbol)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Text("\(Fmt.shortDay(trade.closedAt ?? trade.tradingDay)) · \(trade.result.rawValue)")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 6)
+
+                    Text(Fmt.r(trade.actualR))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(rColor(trade.actualR))
+
+                    Button {
+                        reviewTarget = trade
+                        Haptics.tap()
+                    } label: {
+                        Text("Разобрать")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.background)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.white))
+                    }
+                    .buttonStyle(PressableButtonStyle())
+                }
+                .padding(.vertical, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .glassCard(cornerRadius: 20)
+    }
+
+    private var reviewsDoneCard: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(Theme.green.opacity(0.16))
+                    .frame(width: 32, height: 32)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.green)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Всё разобрано")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("За последние 7 дней у каждой сделки есть разбор.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .glassCard(cornerRadius: 20)
+    }
+
+    private func syncReviewState() {
+        let count = pendingReviewTrades.count
+
+        if count == 0 {
+            if lastPendingReviews > 0 {
+                reviewsClearedAt = Date().timeIntervalSince1970
+            }
+        } else {
+            reviewsClearedAt = 0
+        }
+
+        lastPendingReviews = count
+    }
+
+    private func rColor(_ value: Double) -> Color {
+        if value > 0.05 { return Theme.green }
+        if value < -0.05 { return Theme.red }
+        return Theme.textSecondary
     }
 
     // MARK: - Week summary
@@ -677,14 +825,14 @@ struct TodayView: View {
 
     private var startCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("ЦИКЛ ДНЯ")
+            Text("ПОДГОТОВКА СДЕЛКИ")
                 .font(.system(size: 10.5, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(Theme.accent)
-            Text("Новый торговый день")
+            Text("Чек-лист — под вход, а не под день")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
-            Text("\(cycleStartText) — запуск цикла, \(cycleEndText) — закрытие терминала. Между ними рынок анализируется и принимается решение.")
+            Text("Чек-лист проходится тогда, когда вы берёте конкретный вход: контекст, нарратив A → B, зона, валидация, риск и RR. Цикл \(cycleStartText)–\(cycleEndText) — окно, в котором вы разбираете рынок и готовите сделку, а не ежедневная повинность.")
                 .font(.system(size: 13.5))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1058,6 +1206,28 @@ struct TodayView: View {
         cycle.trade = trade
         cycle.result = .entry
         cycle.updatedAt = .now
+
+        trade.snapshot = TradeSnapshotBuilder.make(
+            .init(
+                symbol: cycle.symbol,
+                direction: cycle.direction,
+                entry: entry,
+                stop: stop,
+                takeProfit: takeProfit,
+                riskUSD: cycle.riskUSD,
+                plannedRR: rr,
+                setupName: "",
+                ladderStep: cycle.ladderStepIndex,
+                ladderAmounts: settings?.ladderAmounts ?? [cycle.riskUSD],
+                accumulatedR: cycle.accumulatedR,
+                cycle: cycle,
+                settings: settings,
+                ladderState: ladder,
+                trades: trades + [trade],
+                note: cycle.pointANote
+            )
+        )
+
         save()
         Haptics.success()
     }
@@ -1073,6 +1243,7 @@ struct TodayView: View {
         }
         save()
         LadderEngine.sync(context: context)
+        syncReviewState()
     }
 
     private func save() {

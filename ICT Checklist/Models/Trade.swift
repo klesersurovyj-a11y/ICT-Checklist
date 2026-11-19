@@ -32,6 +32,24 @@ final class Trade {
     var closedAt: Date? = nil
     /// Сделка загружена демо-базой и удаляется одной кнопкой в настройках.
     var isDemo: Bool = false
+    /// Название сетапа плейбука на момент создания сделки.
+    var setupName: String = ""
+    /// Отмеченные пункты чек-листа сделки: список ключей через запятую.
+    var checklistRaw: String = ""
+    /// Меморандум инвестиционного комитета.
+    var memoThesis: String = ""
+    var memoPricedIn: String = ""
+    var memoScenarios: String = ""
+    var memoInvalidation: String = ""
+    var memoAnswers: String = ""
+    var memoRejectReason: String = ""
+    var memoVerdictRaw: String = ""
+    /// Ответы на возражения красной команды по истории: JSON словаря «ключ → ответ».
+    var redTeamRepliesRaw: String = ""
+    /// Возражения на входе, зафиксированные в момент создания сделки: JSON массива.
+    var redTeamHistoryRaw: String = ""
+    /// Замороженный снимок мира на момент входа: JSON.
+    var snapshotRaw: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \TradeShot.trade)
     var shots: [TradeShot] = []
@@ -39,6 +57,7 @@ final class Trade {
     var cycle: TradingCycle?
     var plan: TradePlan?
     var account: TradingAccount?
+    var setup: PlaybookSetup?
     var lossReview: LossReview?
     var review: TradeReview?
     var similarReviews: [LossReview] = []
@@ -78,10 +97,23 @@ final class Trade {
         self.poiRaw = ""
         self.closedAt = closedAt
         self.isDemo = false
+        self.setupName = ""
+        self.checklistRaw = ""
+        self.memoThesis = ""
+        self.memoPricedIn = ""
+        self.memoScenarios = ""
+        self.memoInvalidation = ""
+        self.memoAnswers = ""
+        self.memoRejectReason = ""
+        self.memoVerdictRaw = ""
+        self.redTeamRepliesRaw = ""
+        self.redTeamHistoryRaw = ""
+        self.snapshotRaw = ""
         self.shots = []
         self.cycle = nil
         self.plan = nil
         self.account = nil
+        self.setup = nil
         self.lossReview = nil
         self.review = nil
         self.similarReviews = []
@@ -129,5 +161,91 @@ extension Trade {
     var moneyResult: Double {
         guard result != .open else { return 0 }
         return riskUSD * actualR
+    }
+
+    /// Отмеченные пункты чек-листа сделки.
+    var checkedChecks: Set<TradeCheck> {
+        Set(checklistRaw.split(separator: ",").compactMap { TradeCheck(rawValue: String($0)) })
+    }
+
+    var checklistProgress: Double {
+        guard !TradeCheck.allCases.isEmpty else { return 1 }
+        return Double(checkedChecks.count) / Double(TradeCheck.allCases.count)
+    }
+
+    /// Сделка прошла по системе: отмечены все пункты чек-листа.
+    var checklistComplete: Bool {
+        checkedChecks.count == TradeCheck.allCases.count
+    }
+
+    /// Переключает пункт чек-листа и сохраняет его в сделке.
+    func toggleCheck(_ item: TradeCheck) {
+        var set = checkedChecks
+        if set.contains(item) {
+            set.remove(item)
+        } else {
+            set.insert(item)
+        }
+        checklistRaw = set.map(\.rawValue).sorted().joined(separator: ",")
+    }
+
+    /// Вердикт инвестиционного комитета по сделке.
+    var memoVerdict: MemoVerdict {
+        MemoVerdict(rawValue: memoVerdictRaw) ?? .none
+    }
+
+    /// Тезис записан: меморандум по сделке начат.
+    var hasMemoThesis: Bool {
+        !memoThesis.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Инвалидация записана.
+    var hasMemoInvalidation: Bool {
+        !memoInvalidation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Меморандум заполнен хотя бы частично.
+    var hasMemo: Bool {
+        hasMemoThesis
+            || hasMemoInvalidation
+            || !memoPricedIn.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !memoScenarios.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !memoAnswers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !memoRejectReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Возражения красной команды по этой сделке.
+    func memoObjections(minRR: Double) -> [RedTeamObjection] {
+        InvestmentCommittee.objections(
+            thesis: memoThesis,
+            invalidation: memoInvalidation,
+            checkedCount: checkedChecks.count,
+            totalChecks: TradeCheck.allCases.count,
+            rr: plannedRR,
+            minRR: minRR
+        )
+    }
+
+    /// Ответы на конкретные возражения красной команды по истории.
+    var redTeamReplies: [String: String] {
+        get { RedTeamHistory.decodeReplies(redTeamRepliesRaw) }
+        set { redTeamRepliesRaw = RedTeamHistory.encode(replies: newValue) }
+    }
+
+    /// Возражения красной команды, зафиксированные на входе.
+    var redTeamHistory: [RedTeamHistoryObjection] {
+        get { RedTeamHistory.decodeHistory(redTeamHistoryRaw) }
+        set { redTeamHistoryRaw = RedTeamHistory.encode(history: newValue) }
+    }
+
+    /// На все возражения по истории дан ответ.
+    var redTeamHistoryAnswered: Bool {
+        RedTeamHistory.isAnswered(redTeamHistory, replies: redTeamReplies)
+    }
+
+    /// Снимок мира на входе. Пусто у сделок, созданных до этой версии.
+    var snapshot: TradeSnapshot? {
+        get { TradeSnapshot.decode(snapshotRaw) }
+        set { snapshotRaw = newValue.map(TradeSnapshot.encode) ?? "" }
     }
 }

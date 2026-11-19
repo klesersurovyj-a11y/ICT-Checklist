@@ -99,11 +99,24 @@ struct NextTradeProvider: TimelineProvider {
 struct NextTradeEntryView: View {
     var entry: NextTradeEntry
 
+    @Environment(\.widgetFamily) private var family
+
     private var accumuletedColor: Color {
         entry.accumulatedR >= 0 ? .green : .red
     }
 
     var body: some View {
+        Group {
+            if family == .systemLarge {
+                largeBody
+            } else {
+                smallBody
+            }
+        }
+        .widgetContainerBackground()
+    }
+
+    private var smallBody: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("СЛЕДУЮЩАЯ СДЕЛКА")
                 .font(.system(size: 9, weight: .semibold))
@@ -140,7 +153,69 @@ struct NextTradeEntryView: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
         }
-        .widgetContainerBackground()
+    }
+
+    private var largeBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("СЛЕДУЮЩАЯ СДЕЛКА")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .tracking(1.3)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Text("Ступень \(entry.stepIndex + 1) из 3")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Text(money(entry.amount))
+                .font(.system(size: 56, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.45)
+
+            Text("риск на сделку по Risk Ladder")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            stepRail
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 10) {
+                WidgetStatCell(
+                    title: "Накоплено",
+                    value: rText(entry.accumulatedR),
+                    tint: accumuletedColor
+                )
+
+                if let lastR = entry.lastR {
+                    WidgetStatCell(
+                        title: "Последняя",
+                        value: rText(lastR),
+                        tint: rColor(lastR)
+                    )
+                } else {
+                    WidgetStatCell(title: "Последняя", value: "—", tint: .secondary)
+                }
+            }
+        }
+    }
+
+    private var stepRail: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<3, id: \.self) { index in
+                Capsule()
+                    .fill(index <= entry.stepIndex ? Color.accentColor : Color.white.opacity(0.12))
+                    .frame(height: 6)
+            }
+        }
     }
 
     private func money(_ value: Double) -> String {
@@ -171,6 +246,38 @@ private extension View {
         } else {
             self.background(Color(red: 0.03, green: 0.04, blue: 0.06))
         }
+    }
+}
+
+// MARK: - Large widget pieces
+
+/// Небольшая плитка «подпись + значение» для крупных виджетов.
+struct WidgetStatCell: View {
+    let title: String
+    let value: String
+    var tint: Color = .primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 9.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Text(value)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
     }
 }
 
@@ -238,12 +345,43 @@ struct WeekStatsEntryView: View {
 
     @Environment(\.widgetFamily) private var family
 
+    @ViewBuilder
     var body: some View {
-        if family == .systemMedium {
+        switch family {
+        case .accessoryRectangular:
+            accessoryRectangular
+        case .accessoryInline:
+            accessoryInline
+        case .systemLarge:
+            largeBody.widgetContainerBackground()
+        case .systemMedium:
             mediumBody.widgetContainerBackground()
-        } else {
+        default:
             smallBody.widgetContainerBackground()
         }
+    }
+
+    private var accessoryRectangular: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("НЕДЕЛЯ")
+                .font(.system(size: 10, weight: .semibold))
+                .widgetAccentable()
+
+            Text(rText(entry.weekR))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .widgetAccentable()
+
+            WeekBars(days: entry.days, showLabels: false)
+                .frame(height: 12)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var accessoryInline: some View {
+        Text("\(rText(entry.weekR)) · \(winPercent)% · \(dealsText(entry.trades))")
     }
 
     private var smallBody: some View {
@@ -311,6 +449,66 @@ struct WeekStatsEntryView: View {
         }
     }
 
+    private var largeBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("ИТОГИ НЕДЕЛИ")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .tracking(1.3)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Text("7 дней")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(rText(entry.weekR))
+                    .font(.system(size: 52, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(rColor(entry.weekR))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+
+                Text(summaryLine)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 0)
+            }
+
+            WeekBars(days: entry.days, showLabels: true, barArea: 104)
+                .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 10) {
+                WidgetStatCell(title: "Лучший день", value: bestDayText, tint: .green)
+                WidgetStatCell(title: "Худший день", value: worstDayText, tint: .red)
+            }
+        }
+    }
+
+    private var bestDayText: String {
+        guard let day = entry.days.max(by: { $0.r < $1.r }), abs(day.r) >= 0.05 else {
+            return "—"
+        }
+        return "\(day.label) \(rText(day.r))"
+    }
+
+    private var worstDayText: String {
+        guard let day = entry.days.min(by: { $0.r < $1.r }), abs(day.r) >= 0.05 else {
+            return "—"
+        }
+        return "\(day.label) \(rText(day.r))"
+    }
+
     private var summaryLine: String {
         "\(winPercent)% win rate · \(dealsText(entry.trades))"
     }
@@ -347,6 +545,8 @@ struct WeekStatsEntryView: View {
 struct WeekBars: View {
     let days: [WidgetData.WeekDay]
     let showLabels: Bool
+    /// Высота области столбиков; для больших виджетов её увеличивают.
+    var barArea: CGFloat? = nil
 
     private var maxMagnitude: Double {
         max(days.map { abs($0.r) }.max() ?? 0, 0.1)
@@ -363,7 +563,7 @@ struct WeekBars: View {
                             .frame(width: 9, height: barHeight(day.r))
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(height: showLabels ? 44 : 20, alignment: .bottom)
+                    .frame(height: rowHeight, alignment: .bottom)
                 }
             }
 
@@ -381,10 +581,17 @@ struct WeekBars: View {
         }
     }
 
+    private var rowHeight: CGFloat {
+        barArea ?? (showLabels ? 44 : 20)
+    }
+
+    private var barsHeight: CGFloat {
+        barArea ?? (showLabels ? 40 : 18)
+    }
+
     private func barHeight(_ value: Double) -> CGFloat {
-        let area = showLabels ? 40.0 : 18.0
         guard abs(value) >= 0.05 else { return 3 }
-        return max(CGFloat(abs(value) / maxMagnitude) * area, 4)
+        return max(CGFloat(abs(value) / maxMagnitude) * barsHeight, 4)
     }
 
     private func barTint(_ value: Double) -> Color {
@@ -405,7 +612,7 @@ struct NextTradeWidget: Widget {
         }
         .configurationDisplayName("Следующая сделка")
         .description("Ступень Risk Ladder, риск на сделку и накопленные R.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
 
@@ -418,7 +625,13 @@ struct WeekStatsWidget: Widget {
         }
         .configurationDisplayName("Итоги недели")
         .description("Суммарный R за 7 дней, win rate, сделки и R по дням недели.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([
+            .systemSmall,
+            .systemMedium,
+            .systemLarge,
+            .accessoryRectangular,
+            .accessoryInline
+        ])
     }
 }
 
@@ -787,19 +1000,74 @@ struct CycleEntryView: View {
         entry.openDirection == "LONG" ? .green : .red
     }
 
+    @ViewBuilder
     var body: some View {
-        Group {
-            if let cycleEnd = entry.cycleEnd, cycleEnd > .now {
-                if family == .systemMedium {
-                    mediumBody(end: cycleEnd)
-                } else {
-                    smallBody(end: cycleEnd)
-                }
-            } else {
-                emptyBody
+        if let cycleEnd = entry.cycleEnd, cycleEnd > .now {
+            switch family {
+            case .accessoryRectangular:
+                accessoryRectangular(end: cycleEnd)
+            case .accessoryInline:
+                accessoryInline(end: cycleEnd)
+            case .systemLarge:
+                largeBody(end: cycleEnd).widgetContainerBackground()
+            case .systemMedium:
+                mediumBody(end: cycleEnd).widgetContainerBackground()
+            default:
+                smallBody(end: cycleEnd).widgetContainerBackground()
+            }
+        } else {
+            switch family {
+            case .accessoryRectangular:
+                accessoryEmpty
+            case .accessoryInline:
+                Text("Цикл не идёт")
+            default:
+                emptyBody.widgetContainerBackground()
             }
         }
-        .widgetContainerBackground()
+    }
+
+    private func accessoryRectangular(end: Date) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("ЦИКЛ")
+                .font(.system(size: 10, weight: .semibold))
+                .widgetAccentable()
+
+            Text(timerInterval: Date.now...end, countsDown: true)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .widgetAccentable()
+
+            HStack(spacing: 6) {
+                Text("Сделки \(tradesText)")
+                    .foregroundStyle(.secondary)
+                Text(cycleRText(entry.rToday))
+                    .foregroundStyle(cycleRColor(entry.rToday))
+            }
+            .font(.system(size: 10.5, weight: .semibold))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func accessoryInline(end: Date) -> some View {
+        Text("Цикл до \(end.formatted(date: .omitted, time: .shortened)) · \(tradesText) · \(cycleRText(entry.rToday))")
+    }
+
+    private var accessoryEmpty: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("ЦИКЛ")
+                .font(.system(size: 10, weight: .semibold))
+                .widgetAccentable()
+            Text("Не идёт")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .widgetAccentable()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func smallBody(end: Date) -> some View {
@@ -921,6 +1189,101 @@ struct CycleEntryView: View {
         }
     }
 
+    private func largeBody(end: Date) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("ЦИКЛ ДНЯ")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .tracking(1.3)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Text("до \(end.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Text(timerInterval: Date.now...end, countsDown: true)
+                .font(.system(size: 54, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+
+            Text("до конца цикла")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                WidgetStatCell(title: "Сделки", value: tradesText)
+
+                WidgetStatCell(
+                    title: "Результат",
+                    value: cycleRText(entry.rToday),
+                    tint: cycleRColor(entry.rToday)
+                )
+
+                if entry.limitsEnabled {
+                    WidgetStatCell(title: "До лимита", value: cycleRText(rLeft), tint: .secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            openTradeBlock
+        }
+    }
+
+    @ViewBuilder
+    private var openTradeBlock: some View {
+        if let symbol = entry.openSymbol {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(symbol)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Text(entry.openDirection ?? "")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(directionColor)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(directionColor.opacity(0.18)))
+
+                    if entry.openIsBE {
+                        Text("BE")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.orange)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                Text("TP \(cycleRText(entry.toTargetR)) · SL \(cycleRText(entry.toStopR))")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+        } else {
+            Text("Открытой сделки нет")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var emptyBody: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("ЦИКЛ ДНЯ")
@@ -954,6 +1317,12 @@ struct CycleWidget: Widget {
         }
         .configurationDisplayName("Цикл дня")
         .description("Сколько времени до конца цикла, сделки и R до дневного лимита, открытая сделка.")
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .supportedFamilies([
+            .systemSmall,
+            .systemMedium,
+            .systemLarge,
+            .accessoryRectangular,
+            .accessoryInline
+        ])
     }
 }

@@ -359,6 +359,9 @@ struct JournalView: View {
 
     private var emptyRow: some View {
         VStack(alignment: .leading, spacing: 6) {
+            BreathingGlyph(systemName: "book.closed")
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
             Text("Прошлых записей пока нет")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)

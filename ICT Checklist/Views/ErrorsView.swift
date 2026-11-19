@@ -718,6 +718,9 @@ struct ErrorsView: View {
 
     private var emptyCard: some View {
         VStack(alignment: .leading, spacing: 8) {
+            BreathingGlyph(systemName: notes.isEmpty ? "exclamationmark.triangle" : "magnifyingglass")
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
             Text(notes.isEmpty ? "Ошибок пока нет" : "Ничего не найдено")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)

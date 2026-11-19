@@ -82,7 +82,6 @@ private struct SettingsContent: View {
     @State private var showDemoRemoveAlert = false
     @State private var showAppLockAlert = false
 
-    @StateObject private var sync = SyncStatus.shared
     @AppStorage("appLock.enabled") private var appLockEnabled = false
     @State private var assistantKeys: [String: Bool] = [:]
 
@@ -211,7 +210,7 @@ private struct SettingsContent: View {
         .alert("Замок включён", isPresented: $showAppLockAlert) {
             Button("Понятно", role: .cancel) {}
         } message: {
-            Text("Данные остаются на устройстве и в iCloud. Замок защищает только доступ к приложению: при следующем запуске или возврате из фона понадобится Face ID, Touch ID или код-пароль устройства.")
+            Text("Данные остаются на этом устройстве. Замок защищает только доступ к приложению: при следующем запуске или возврате из фона понадобится Face ID, Touch ID или код-пароль устройства.")
         }
         .fileImporter(
             isPresented: $showBackupImporter,
@@ -234,17 +233,9 @@ private struct SettingsContent: View {
         .task {
             refreshAssistantKeys()
             rescheduleExistingReminders()
-            sync.start()
         }
         .onChange(of: settings.assistantProviderRaw) { _, _ in
             refreshAssistantKeys()
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: NSPersistentCloudKitContainer.eventChangedNotification
-            )
-        ) { notification in
-            sync.handle(notification)
         }
         .onChange(of: settings.cycleStartHour) { _, _ in rescheduleExistingReminders() }
         .onChange(of: settings.cycleStartMinute) { _, _ in rescheduleExistingReminders() }
@@ -469,6 +460,14 @@ private struct SettingsContent: View {
                     subtitle: "В воскресенье в 18:00, если план новой недели ещё не заполнен",
                     isOn: weekPlanReminderBinding
                 )
+                Divider()
+                    .overlay(Theme.hairline)
+                    .padding(.vertical, 8)
+                ToggleRow(
+                    title: "Напоминать о разборе",
+                    subtitle: "Через час после закрытия сделки, если разбор ещё не заполнен",
+                    isOn: reviewReminderBinding
+                )
                 Text("Напоминания локальные: работают без сети и не покидают устройство.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
@@ -559,6 +558,35 @@ private struct SettingsContent: View {
                 } else {
                     settings.goalReminderEnabled = false
                     save()
+                    Haptics.tap()
+                }
+            }
+        )
+    }
+
+    private var reviewReminderBinding: Binding<Bool> {
+        Binding(
+            get: { settings.reviewReminderEnabled },
+            set: { enabled in
+                if enabled {
+                    Task {
+                        let granted = await ReminderService.requestAuthorization()
+                        if granted {
+                            settings.reviewReminderEnabled = true
+                            save()
+                            TradeReviewReminder.refresh(context: context)
+                            Haptics.success()
+                        } else {
+                            settings.reviewReminderEnabled = false
+                            save()
+                            showNotificationsAlert = true
+                            Haptics.warning()
+                        }
+                    }
+                } else {
+                    settings.reviewReminderEnabled = false
+                    save()
+                    TradeReviewReminder.refresh(context: context)
                     Haptics.tap()
                 }
             }
@@ -1654,7 +1682,7 @@ private struct SettingsContent: View {
                     isOn: appLockBinding
                 )
 
-                Text("Данные остаются на устройстве и в iCloud. Замок защищает только доступ к приложению: он не шифрует базу и не мешает синхронизации.")
+                Text("Данные остаются на этом устройстве. Замок защищает только доступ к приложению: он не шифрует базу.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1677,70 +1705,46 @@ private struct SettingsContent: View {
         )
     }
 
-    // MARK: - Sync
+    // MARK: - Storage
 
     private var syncCard: some View {
-        settingsCard("СИНХРОНИЗАЦИЯ") {
+        settingsCard("ХРАНЕНИЕ") {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
                             .fill(Theme.accent.opacity(0.14))
                             .frame(width: 36, height: 36)
-                        Image(systemName: sync.account == .active ? "icloud.fill" : "icloud.slash")
+                        Image(systemName: "internaldrive")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(sync.account.tint)
+                            .foregroundStyle(Theme.accent)
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("iCloud")
+                        Text("Только это устройство")
                             .font(.system(size: 17, weight: .medium))
                             .foregroundStyle(.white)
-                        Text(sync.account.detail)
+                        Text("Без облака и синхронизации")
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: 8)
-
-                    Text(sync.account.title)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(sync.account.tint)
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(sync.account.tint.opacity(0.14)))
                 }
                 .padding(.vertical, 12)
-
-                if let date = sync.lastSyncDate {
-                    Divider()
-                        .overlay(Theme.hairline)
-
-                    HStack(spacing: 8) {
-                        Text("Последняя синхронизация")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.textSecondary)
-                        Spacer(minLength: 8)
-                        Text(syncMessage(date))
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(sync.lastSyncFailed ? Theme.orange : Theme.textPrimary)
-                    }
-                    .padding(.vertical, 12)
-                }
 
                 Divider()
                     .overlay(Theme.hairline)
 
-                Text("Циклы, сделки, скриншоты и настройки хранятся в iCloud и на этом устройстве.")
+                Text("Циклы, сделки, скриншоты и настройки хранятся в базе на этом устройстве.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 10)
 
-                Text("Локальная база остаётся основной: без сети приложение работает как обычно.")
+                Text("Резервную копию можно выгрузить в JSON и сохранить в «Файлы».")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1750,16 +1754,11 @@ private struct SettingsContent: View {
         }
     }
 
-    private func syncMessage(_ date: Date) -> String {
-        let base = "\(Fmt.shortDay(date)), \(Fmt.time(date))"
-        return sync.lastSyncFailed ? base + " · ошибка" : base
-    }
-
     // MARK: - Footer
 
     private var footer: some View {
         VStack(spacing: 4) {
-            Text("Данные синхронизируются через iCloud")
+            Text("Данные хранятся на этом устройстве")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textTertiary)
             Text("ICT Checklist \(appVersion)")

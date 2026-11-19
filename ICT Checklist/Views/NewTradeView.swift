@@ -5,14 +5,18 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
 struct NewTradeView: View {
     let prefillTrade: Trade?
     let prefill: NewTradePrefill?
+    let prefillSetup: PlaybookSetup?
 
-    init(prefillTrade: Trade? = nil, prefill: NewTradePrefill? = nil) {
+    init(prefillTrade: Trade? = nil, prefill: NewTradePrefill? = nil, setup: PlaybookSetup? = nil) {
         self.prefillTrade = prefillTrade
         self.prefill = prefill
+        self.prefillSetup = setup
     }
 
     @Environment(\.modelContext) private var context
@@ -21,6 +25,8 @@ struct NewTradeView: View {
     @Query private var settingsList: [AppSettings]
     @Query private var ladderList: [RiskLadderState]
     @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
+    @Query(sort: \Trade.entryDate, order: .reverse) private var allTrades: [Trade]
+    @Query(sort: \TradingCycle.day, order: .reverse) private var cycles: [TradingCycle]
 
     @State private var symbol = ""
     @State private var direction: Direction = .long
@@ -35,6 +41,17 @@ struct NewTradeView: View {
     @State private var structure: MarketStructure? = nil
     @State private var poi: POIType? = nil
     @State private var note = ""
+    @State private var checks: Set<TradeCheck> = []
+    @State private var memoThesis = ""
+    @State private var memoPricedIn = ""
+    @State private var memoScenarios = ""
+    @State private var memoInvalidation = ""
+    @State private var memoAnswers = ""
+    @State private var memoRejectReason = ""
+    @State private var memoVerdictRaw = MemoVerdict.none.rawValue
+    @State private var redTeamReplies: [String: String] = [:]
+    @State private var shotItems: [PhotosPickerItem] = []
+    @State private var pendingShots: [Data] = []
     @State private var didLoad = false
 
     private var settings: AppSettings? { settingsList.first }
@@ -45,8 +62,14 @@ struct NewTradeView: View {
     }
 
     private var symbols: [String] {
-        let list = settings?.symbols ?? []
-        return list.isEmpty ? ["EURUSD", "GBPUSD", "XAUUSD"] : list
+        let configured = settings?.symbols ?? []
+        var list = configured.isEmpty ? ["EURUSD", "GBPUSD", "XAUUSD"] : configured
+        if let prefillSetup {
+            for symbol in prefillSetup.symbols where !list.contains(symbol) {
+                list.append(symbol)
+            }
+        }
+        return list
     }
 
     private var minRR: Double { settings?.minRR ?? 2.0 }
@@ -61,6 +84,46 @@ struct NewTradeView: View {
 
     private var canSave: Bool {
         entry != nil && stop != nil && takeProfit != nil && rr != nil && !symbol.isEmpty
+    }
+
+    private var objections: [RedTeamObjection] {
+        InvestmentCommittee.objections(
+            thesis: memoThesis,
+            invalidation: memoInvalidation,
+            checkedCount: checks.count,
+            totalChecks: TradeCheck.allCases.count,
+            rr: rr ?? 0,
+            minRR: minRR
+        )
+    }
+
+    private var draftSetupName: String {
+        if let prefillSetup, !prefillSetup.title.isEmpty {
+            return prefillSetup.title
+        }
+        if let prefillTrade {
+            return RedTeamHistory.setupTitle(of: prefillTrade)
+        }
+        return ""
+    }
+
+    private var historyObjections: [RedTeamHistoryObjection] {
+        RedTeamHistory.objections(
+            for: RedTeamHistory.draft(
+                symbol: symbol,
+                direction: direction,
+                setupName: draftSetupName
+            ),
+            trades: allTrades
+        )
+    }
+
+    private var historyAnswered: Bool {
+        RedTeamHistory.isAnswered(historyObjections, replies: redTeamReplies)
+    }
+
+    private var snapshotCycle: TradingCycle? {
+        prefillTrade?.cycle ?? cycles.first { Calendar.current.isDateInToday($0.day) }
     }
 
     var body: some View {
@@ -79,10 +142,36 @@ struct NewTradeView: View {
                         .reveal(.rise, 2)
                     tagsCard
                         .reveal(.rise, 3)
+                    TradeChecklistCard(checks: checks) { item in
+                        if checks.contains(item) {
+                            checks.remove(item)
+                        } else {
+                            checks.insert(item)
+                        }
+                        Haptics.select()
+                    }
+                    .reveal(.rise, 4)
+
+                    InvestmentMemoCard(
+                        thesis: $memoThesis,
+                        pricedIn: $memoPricedIn,
+                        scenarios: $memoScenarios,
+                        invalidation: $memoInvalidation,
+                        answers: $memoAnswers,
+                        rejectReason: $memoRejectReason,
+                        verdictRaw: $memoVerdictRaw,
+                        objections: objections,
+                        historyObjections: historyObjections,
+                        replies: $redTeamReplies
+                    )
+                    .reveal(.rise, 5)
+
                     noteField
-                        .reveal(.rise, 4)
+                        .reveal(.rise, 6)
+                    shotsCard
+                        .reveal(.rise, 7)
                     footer
-                        .reveal(.rise, 5)
+                        .reveal(.rise, 8)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -90,6 +179,10 @@ struct NewTradeView: View {
             }
         }
         .onAppear(perform: loadDefaults)
+        .onChange(of: shotItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await loadShots(items) }
+        }
     }
 
     // MARK: - Header
@@ -122,12 +215,16 @@ struct NewTradeView: View {
 
     private var sourceLabel: String {
         if prefillTrade != nil { return "Дубликат сделки" }
+        if prefillSetup != nil { return "Сделка по сетапу" }
         if prefill != nil { return "Из калькулятора" }
         return "Вручную"
     }
 
     private var headerSubtitle: String {
         let base = "Сегодня · \(Fmt.shortDay(.now)) · ступень \(stepIndex + 1)"
+        if let prefillSetup {
+            return "\(base) · \(prefillSetup.title) · RR \(String(format: "%.1f", prefillSetup.typicalRR))"
+        }
         guard let prefillTrade else { return base }
         return "\(base) · RR из сделки \(Fmt.rr(prefillTrade.plannedRR))"
     }
@@ -495,14 +592,133 @@ struct NewTradeView: View {
         GlassNoteField(placeholder: "Заметка к сделке…", text: $note, limit: 300, lines: 2...4, minHeight: 64)
     }
 
+    // MARK: - Screenshots at entry
+
+    private var shotsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Скриншоты до входа")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                Text("\(pendingShots.count)/3")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(pendingShots.enumerated()), id: \.offset) { index, data in
+                        ZStack(alignment: .topTrailing) {
+                            Group {
+                                if let image = UIImage(data: data) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                } else {
+                                    ZStack {
+                                        Color.white.opacity(0.04)
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 18))
+                                            .foregroundStyle(Theme.textTertiary)
+                                    }
+                                }
+                            }
+                            .frame(width: 74, height: 74)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                            Button {
+                                pendingShots.remove(at: index)
+                                Haptics.tap()
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 18, height: 18)
+                                    .background(Circle().fill(Color.black.opacity(0.6)))
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: 4, y: -4)
+                        }
+                    }
+
+                    PhotosPicker(
+                        selection: $shotItems,
+                        maxSelectionCount: 3,
+                        matching: .images
+                    ) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.04))
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(
+                                    Color.white.opacity(0.14),
+                                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                                )
+                            Image(systemName: "plus")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(Theme.accent)
+                        }
+                        .frame(width: 74, height: 74)
+                    }
+                    .disabled(pendingShots.count >= 3)
+                    .opacity(pendingShots.count >= 3 ? 0.4 : 1)
+                }
+                .padding(.vertical, 2)
+            }
+
+            Text("Снимок входа сохранит их вместе с уровнями цикла, ступенью, банками и лимитами дня.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .glassCard(cornerRadius: 20)
+    }
+
     private var footer: some View {
         VStack(spacing: 10) {
             PrimaryButton(title: "Открыть сделку", isEnabled: canSave) {
                 save()
             }
-            Text("Сделка появится в журнале и не блокирует цикл дня")
+            Text(
+                checks.count == TradeCheck.allCases.count
+                    ? "Сделка пройдёт по системе — чек-лист закрыт"
+                    : "Не все пункты отмечены: сделка сохранится как «вне системы»"
+            )
+            .font(.system(size: 12))
+            .foregroundStyle(checks.count == TradeCheck.allCases.count ? Theme.green : Theme.textTertiary)
+            .multilineTextAlignment(.center)
+
+            Text(memoCaption)
                 .font(.system(size: 12))
-                .foregroundStyle(Theme.textTertiary)
+                .foregroundStyle(memoCaptionTint)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private var memoCaption: String {
+        if !historyAnswered {
+            return "Красная команда: возражений по истории без ответа \(historyObjections.count)"
+        }
+        switch MemoVerdict(rawValue: memoVerdictRaw) ?? .none {
+        case .approved:
+            return "Комитет утвердил вход: тезис и инвалидация записаны"
+        case .rejected:
+            return "Комитет отклонил идею — сделка сохранится как вне системы"
+        case .none:
+            if objections.isEmpty {
+                return "Возражений нет — осталось утвердить меморандум"
+            }
+            return "Без ответов на возражения комитет вход не утверждает"
+        }
+    }
+
+    private var memoCaptionTint: Color {
+        switch MemoVerdict(rawValue: memoVerdictRaw) ?? .none {
+        case .approved: return Theme.green
+        case .rejected: return Theme.red
+        case .none: return Theme.textTertiary
         }
     }
 
@@ -529,6 +745,16 @@ struct NewTradeView: View {
             return
         }
 
+        if let prefillSetup {
+            if let first = prefillSetup.symbols.first {
+                symbol = first
+            }
+            if let direction = prefillSetup.direction.tradeDirection {
+                self.direction = direction
+            }
+            return
+        }
+
         if let prefill {
             entry = prefill.entry
             stop = prefill.stop
@@ -539,6 +765,17 @@ struct NewTradeView: View {
                 symbol = value
             }
         }
+    }
+
+    private func loadShots(_ items: [PhotosPickerItem]) async {
+        var loaded: [Data] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                loaded.append(data)
+            }
+        }
+        pendingShots = Array((pendingShots + loaded).prefix(3))
+        shotItems = []
     }
 
     private func save() {
@@ -563,7 +800,55 @@ struct NewTradeView: View {
         trade.structureRaw = structure?.rawValue ?? ""
         trade.poiRaw = poi?.rawValue ?? ""
         trade.account = account
+        trade.setup = prefillSetup
+        trade.setupName = prefillSetup?.title ?? ""
+        trade.checklistRaw = checks.map(\.rawValue).sorted().joined(separator: ",")
+        trade.memoThesis = memoThesis.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoPricedIn = memoPricedIn.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoScenarios = memoScenarios.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoInvalidation = memoInvalidation.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoAnswers = memoAnswers.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoRejectReason = memoRejectReason.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoVerdictRaw = memoVerdictRaw
+        trade.redTeamHistory = historyObjections
+        trade.redTeamReplies = RedTeamHistory.cleaned(redTeamReplies)
         context.insert(trade)
+
+        for data in pendingShots {
+            let shot = TradeShot(imageData: data, createdAt: trade.entryDate, role: .beforeEntry)
+            context.insert(shot)
+            trade.shots.append(shot)
+        }
+
+        trade.snapshot = TradeSnapshotBuilder.make(
+            .init(
+                symbol: symbol,
+                direction: direction,
+                entry: entry,
+                stop: stop,
+                takeProfit: takeProfit,
+                riskUSD: risk,
+                plannedRR: rr,
+                setupName: prefillSetup?.title ?? "",
+                ladderStep: stepIndex,
+                ladderAmounts: amounts,
+                accumulatedR: ladderList.first?.accumulatedR ?? 0,
+                cycle: snapshotCycle,
+                settings: settings,
+                ladderState: ladderList.first,
+                trades: allTrades + [trade],
+                thesis: memoThesis.trimmingCharacters(in: .whitespacesAndNewlines),
+                pricedIn: memoPricedIn.trimmingCharacters(in: .whitespacesAndNewlines),
+                scenarios: memoScenarios.trimmingCharacters(in: .whitespacesAndNewlines),
+                invalidation: memoInvalidation.trimmingCharacters(in: .whitespacesAndNewlines),
+                answers: memoAnswers.trimmingCharacters(in: .whitespacesAndNewlines),
+                note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                tags: tags,
+                checks: checks,
+                shotCount: pendingShots.count
+            )
+        )
+
         try? context.save()
         Haptics.success()
         dismiss()

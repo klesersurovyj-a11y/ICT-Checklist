@@ -695,7 +695,7 @@ struct SearchView: View {
             )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(trade.symbol)
+                HighlightedText(text: trade.symbol, query: trimmed)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -725,7 +725,7 @@ struct SearchView: View {
             iconCircle(systemName: note.kind.icon, tint: note.kind.tint)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(note.displayTitle)
+                HighlightedText(text: note.displayTitle, query: trimmed)
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -753,7 +753,7 @@ struct SearchView: View {
             iconCircle(systemName: "calendar", tint: Theme.textSecondary)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(title.isEmpty ? plan.symbol : title)
+                HighlightedText(text: title.isEmpty ? plan.symbol : title, query: trimmed)
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -779,7 +779,7 @@ struct SearchView: View {
             iconCircle(systemName: "exclamationmark.triangle", tint: tint)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(note.title)
+                HighlightedText(text: note.title, query: trimmed)
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)

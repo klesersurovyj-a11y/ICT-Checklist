@@ -4,7 +4,7 @@
 //
 //  Замок приложения: Face ID, Touch ID или код-пароль устройства
 //  при запуске и возврате из фона. Данные при этом остаются
-//  на устройстве и в iCloud — замок защищает только доступ к приложению.
+//  на этом устройстве — замок защищает только доступ к приложению.
 //
 
 import SwiftUI
@@ -191,7 +191,7 @@ struct AppLockView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text("Сделки, планы и заметки остаются на устройстве и в iCloud.")
+                Text("Сделки, планы и заметки остаются на этом устройстве.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.textTertiary)
                     .multilineTextAlignment(.center)

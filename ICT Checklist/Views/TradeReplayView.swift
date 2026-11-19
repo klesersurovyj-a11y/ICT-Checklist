@@ -81,9 +81,20 @@ private struct TradeReplayContent: View {
                 resultReasonCard
                     .reveal(.rise, 6)
 
-                if hasChecklistContext {
-                    checklistContextCard
+                if !trade.redTeamHistory.isEmpty {
+                    redTeamCard
                         .reveal(.rise, 7)
+                }
+
+                if let snapshot = trade.snapshot {
+                    TradeSnapshotCard(
+                        snapshot: snapshot,
+                        shots: frozenShots(snapshot)
+                    )
+                    .reveal(.rise, 7)
+                } else if hasChecklistContext {
+                    checklistContextCard
+                        .reveal(.rise, 8)
                 }
 
                 footer
@@ -232,7 +243,7 @@ private struct TradeReplayContent: View {
                 )
             }
 
-            Text("Скриншоты хранятся в базе и синхронизируются через iCloud. Уже добавленные снимки можно разметить как «до входа» или «после закрытия» в галерее сделки.")
+            Text("Скриншоты хранятся в базе на этом устройстве. Уже добавленные снимки можно разметить как «до входа» или «после закрытия» в галерее сделки.")
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -459,6 +470,11 @@ private struct TradeReplayContent: View {
         trade.cycle != nil || trade.plan != nil
     }
 
+    /// Скриншоты, которые уже были у сделки в момент входа.
+    private func frozenShots(_ snapshot: TradeSnapshot) -> [TradeShot] {
+        trade.sortedShots.filter { $0.createdAt <= snapshot.createdAt }
+    }
+
     private var checklistContextCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Контекст из чек-листа")
@@ -509,6 +525,63 @@ private struct TradeReplayContent: View {
         }
 
         return items
+    }
+
+    // MARK: - Red team verification
+
+    private var redTeamCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Красная команда")
+
+            Text("Возражения комитета на входе и ваш ответ. Здесь видно, чем похожие сделки закончились.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(trade.redTeamHistory) { objection in
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(objection.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(objection.detail)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ForEach(objection.evidence) { item in
+                        Text("\(Fmt.dayMonth(item.day)) · \(item.symbol) · \(Fmt.r(item.r)) · \(item.reason)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    let answer = trade.redTeamReplies[objection.id] ?? ""
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("ОТВЕТ")
+                            .font(.system(size: 8.5, weight: .bold))
+                            .tracking(0.8)
+                            .foregroundStyle(Theme.textTertiary)
+
+                        Text(answer.isEmpty ? "не записан" : answer)
+                            .font(.system(size: 11.5, weight: answer.isEmpty ? .regular : .medium))
+                            .foregroundStyle(answer.isEmpty ? Theme.orange : Theme.green)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
+            }
+        }
+        .padding(16)
+        .glassCard(cornerRadius: 22)
     }
 
     // MARK: - Footer

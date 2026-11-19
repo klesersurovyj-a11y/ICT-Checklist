@@ -180,6 +180,8 @@ private struct MiniPriceChart: View {
     let stop: Double
     let target: Double
 
+    @State private var selectedDate: Date?
+
     private var lowerBound: Double {
         let lows = bars.map(\.low)
         let levels = [entry, stop, target]
@@ -215,6 +217,13 @@ private struct MiniPriceChart: View {
         Date(timeIntervalSince1970: Double(bar.time))
     }
 
+    private var selectedBar: ChartBar? {
+        guard let selectedDate, !bars.isEmpty else { return nil }
+        return bars.min {
+            abs(date($0).timeIntervalSince(selectedDate)) < abs(date($1).timeIntervalSince(selectedDate))
+        }
+    }
+
     var body: some View {
         Chart {
             ForEach(bars, id: \.time) { bar in
@@ -246,7 +255,23 @@ private struct MiniPriceChart: View {
             RuleMark(y: .value("Тейк", target))
                 .foregroundStyle(Theme.green)
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
+
+            if let bar = selectedBar {
+                RuleMark(x: .value("Время", date(bar)))
+                    .foregroundStyle(Color.white.opacity(0.22))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+                    .annotation(position: .top, spacing: 2) {
+                        Text(Fmt.price(bar.close))
+                            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.black.opacity(0.55)))
+                    }
+            }
         }
+        .chartXSelection(value: $selectedDate)
         .chartXScale(domain: firstDate...lastDate)
         .chartYScale(domain: priceDomain)
         .chartXAxis(.hidden)

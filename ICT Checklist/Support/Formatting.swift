@@ -58,6 +58,32 @@ enum Fmt {
         return "$" + text
     }
 
+    /// Деньги с разделителем разрядов и знаком валюты после числа: «12 480 $».
+    static func groupedMoney(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "ru_RU")
+        formatter.groupingSeparator = " "
+        formatter.usesGroupingSeparator = true
+        formatter.maximumFractionDigits = abs(value) >= 100 ? 0 : 2
+        formatter.minimumFractionDigits = 0
+        let text = formatter.string(from: NSNumber(value: value)) ?? String(format: "%.0f", value)
+        return text + " $"
+    }
+
+    static func groupedMoneySigned(_ value: Double) -> String {
+        guard abs(value) >= 0.005 else { return groupedMoney(0) }
+        let sign = value > 0 ? "+" : "\u{2212}"
+        return sign + groupedMoney(abs(value))
+    }
+
+    /// Процент со знаком: «+4.2%», «−3.2%».
+    static func signedPercent(_ value: Double) -> String {
+        guard abs(value) >= 0.005 else { return "0.0%" }
+        let sign = value > 0 ? "+" : "\u{2212}"
+        return sign + String(format: "%.1f%%", abs(value))
+    }
+
     static func r(_ value: Double) -> String {
         guard abs(value) >= 0.05 else { return "0.0R" }
         let sign = value > 0 ? "+" : "\u{2212}"

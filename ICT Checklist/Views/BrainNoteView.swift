@@ -10,9 +10,18 @@ import PhotosUI
 
 struct BrainNoteView: View {
     @Bindable var note: BrainNote
+    var onClose: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
 
     @Query(sort: \Trade.entryDate, order: .reverse) private var trades: [Trade]
 
@@ -90,7 +99,7 @@ struct BrainNoteView: View {
                 context.delete(note)
                 try? context.save()
                 Haptics.warning()
-                dismiss()
+                close()
             }
             Button("Отмена", role: .cancel) {}
         } message: {
@@ -104,7 +113,7 @@ struct BrainNoteView: View {
         HStack(spacing: 10) {
             Button {
                 persist()
-                dismiss()
+                close()
             } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 15, weight: .semibold))

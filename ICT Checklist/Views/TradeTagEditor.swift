@@ -148,7 +148,7 @@ struct TradeTagEditor: View {
             }
 
             if trade.shots.isEmpty {
-                Text("Прикрепите снимок терминала — он синхронизируется через iCloud.")
+                Text("Прикрепите снимок терминала — он сохраняется на этом устройстве.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)

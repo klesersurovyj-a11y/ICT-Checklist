@@ -20,6 +20,8 @@ private struct DayTarget: Identifiable {
 }
 
 struct CalendarView: View {
+    @Environment(\.dismiss) private var dismiss
+
     @Query private var cycles: [TradingCycle]
     @Query private var settingsList: [AppSettings]
 
@@ -132,9 +134,24 @@ struct CalendarView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            SectionLabel(text: "История")
-            ScreenTitle(text: "Календарь")
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionLabel(text: "История")
+                ScreenTitle(text: "Календарь")
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 36, height: 36)
+                    .glassCircle()
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -634,7 +651,7 @@ struct CalendarView: View {
     }
 
     private var footer: some View {
-        Text("Данные синхронизируются через iCloud")
+        Text("Данные хранятся на этом устройстве")
             .font(.system(size: 12))
             .foregroundStyle(Theme.textTertiary)
             .frame(maxWidth: .infinity)

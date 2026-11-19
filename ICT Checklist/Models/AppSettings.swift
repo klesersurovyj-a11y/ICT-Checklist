@@ -46,6 +46,9 @@ final class AppSettings {
     /// Напоминать заполнить дневник после закрытия терминала.
     var journalReminderEnabled: Bool = false
 
+    /// Напоминать заполнить разбор через час после закрытия сделки.
+    var reviewReminderEnabled: Bool = false
+
     /// Напоминать про план новой недели в воскресенье.
     var weekPlanReminderEnabled: Bool = false
 

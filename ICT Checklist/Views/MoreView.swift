@@ -2,8 +2,7 @@
 //  MoreView.swift
 //  ICT Checklist
 //
-//  «Все разделы»: единая структура приложения — риск, результаты,
-//  разбор, система и сервис в одном месте.
+//  «Все разделы»: компактный каталог приложения в четырёх группах.
 //
 
 import SwiftUI
@@ -11,20 +10,39 @@ import SwiftData
 
 private enum MoreDestination: String, Identifiable {
     case search
+    case terminal
     case charts
+    case worldEconomy
+    case bankRates
+    case portfolio
+    case equityCurve
+    case capitalDiscipline
+    case compliance
+    case committeeAgenda
+    case systemVersions
+    case setupWeights
+    case disciplineSystem
+    case correlations
+    case monteCarlo
     case riskLadder
     case riskIntelligence
     case calculator
     case monthlyReview
     case weeklyPerformance
+    case calendar
     case marketBehavior
     case algorithmMonitor
     case entryHours
+    case tags
+    case benchmark
     case tradeDuration
     case report
     case achievements
 
     case secondBrain
+    case adviceJournal
+    case playbook
+    case training
     case journal
     case errors
     case goals
@@ -33,6 +51,7 @@ private enum MoreDestination: String, Identifiable {
     case profiles
     case levels
     case accounts
+    case csvImport
 
     case assistant
     case settings
@@ -40,18 +59,19 @@ private enum MoreDestination: String, Identifiable {
     var id: String { rawValue }
 }
 
-private struct MoreTile {
+private struct MoreSection: Identifiable {
     let destination: MoreDestination
     let title: String
-    let subtitle: String
     let icon: String
     var badge: String? = nil
+
+    var id: String { destination.rawValue }
 }
 
 private struct MoreGroup: Identifiable {
     let id: String
     let title: String
-    let tiles: [MoreTile]
+    let sections: [MoreSection]
 }
 
 struct MoreView: View {
@@ -62,7 +82,6 @@ struct MoreView: View {
     @Query private var trades: [Trade]
 
     @State private var destination: MoreDestination?
-    @State private var searchText = ""
 
     private var awaitingErrors: Int {
         errorNotes.filter { $0.status == .awaiting }.count
@@ -75,191 +94,82 @@ struct MoreView: View {
     private var groups: [MoreGroup] {
         [
             MoreGroup(
-                id: "market",
-                title: "Рынок",
-                tiles: [
-                    MoreTile(
-                        destination: .charts,
-                        title: "Графики TradingView",
-                        subtitle: "Инструменты, таймфреймы, разметка",
-                        icon: "chart.xyaxis.line"
-                    )
-                ]
-            ),
-            MoreGroup(
-                id: "risk",
-                title: "Риск",
-                tiles: [
-                    MoreTile(
-                        destination: .riskLadder,
-                        title: "Risk Ladder",
-                        subtitle: "Ступени риска и путь капитала",
-                        icon: "stairs"
-                    ),
-                    MoreTile(
-                        destination: .riskIntelligence,
-                        title: "Risk Intelligence",
-                        subtitle: "Риск в R и %, просадка, лимиты",
-                        icon: "shield.lefthalf.filled"
-                    ),
-                    MoreTile(
-                        destination: .calculator,
-                        title: "Калькулятор позиции",
-                        subtitle: "Риск, объём и тейк до входа",
-                        icon: "percent"
-                    ),
-                    MoreTile(
-                        destination: .goals,
-                        title: "Цели",
-                        subtitle: "Месячная цель по R",
-                        icon: "target"
-                    )
+                id: "capital",
+                title: "Капитал и риск",
+                sections: [
+                    MoreSection(destination: .portfolio, title: "Портфель", icon: "briefcase"),
+                    MoreSection(destination: .equityCurve, title: "Капитал и просадка", icon: "chart.xyaxis.line"),
+                    MoreSection(destination: .capitalDiscipline, title: "Цена своеволия", icon: "scale.3d"),
+                    MoreSection(destination: .compliance, title: "Комплаенс", icon: "shield.checkered"),
+                    MoreSection(destination: .committeeAgenda, title: "Повестка комитета", icon: "list.clipboard"),
+                    MoreSection(destination: .systemVersions, title: "Версии системы", icon: "clock.arrow.circlepath"),
+                    MoreSection(destination: .setupWeights, title: "Веса сетапов", icon: "chart.pie"),
+                    MoreSection(destination: .disciplineSystem, title: "Дисциплина", icon: "checkmark.seal"),
+                    MoreSection(destination: .correlations, title: "Корреляции", icon: "tablecells"),
+                    MoreSection(destination: .monteCarlo, title: "Монте-Карло", icon: "chart.bar.xaxis"),
+                    MoreSection(destination: .riskLadder, title: "Risk Ladder", icon: "stairs"),
+                    MoreSection(destination: .riskIntelligence, title: "Risk Intelligence", icon: "shield.lefthalf.filled"),
+                    MoreSection(destination: .calculator, title: "Калькулятор позиции", icon: "percent"),
+                    MoreSection(destination: .goals, title: "Цели", icon: "target")
                 ]
             ),
             MoreGroup(
                 id: "results",
                 title: "Результаты",
-                tiles: [
-                    MoreTile(
-                        destination: .monthlyReview,
-                        title: "Monthly Review",
-                        subtitle: "Разбор месяца в стиле THE EDGE",
-                        icon: "calendar.badge.clock"
-                    ),
-                    MoreTile(
-                        destination: .weeklyPerformance,
-                        title: "Разбор недели",
-                        subtitle: "Недельный результат и план",
-                        icon: "chart.bar.doc.horizontal"
-                    ),
-                    MoreTile(
-                        destination: .marketBehavior,
-                        title: "Market Behavior",
-                        subtitle: "Структура, сессии, дни, POI",
-                        icon: "waveform.path.ecg"
-                    ),
-                    MoreTile(
-                        destination: .algorithmMonitor,
-                        title: "Algorithm Monitor",
-                        subtitle: "Скользящие метрики и сигнал",
-                        icon: "chart.line.uptrend.xyaxis"
-                    ),
-                    MoreTile(
-                        destination: .entryHours,
-                        title: "Часы входа",
-                        subtitle: "Тепловая карта R по дням и часам",
-                        icon: "square.grid.3x3"
-                    ),
-                    MoreTile(
-                        destination: .tradeDuration,
-                        title: "Время в сделке",
-                        subtitle: "Сколько сделка живёт до результата",
-                        icon: "hourglass"
-                    ),
-                    MoreTile(
-                        destination: .report,
-                        title: "Отчёты PDF",
-                        subtitle: "Итоги за период",
-                        icon: "doc.text"
-                    ),
-                    MoreTile(
-                        destination: .achievements,
-                        title: "Достижения",
-                        subtitle: "Вехи и прогресс",
-                        icon: "trophy"
-                    )
+                sections: [
+                    MoreSection(destination: .monthlyReview, title: "Monthly Review", icon: "calendar.badge.clock"),
+                    MoreSection(destination: .weeklyPerformance, title: "Разбор недели", icon: "chart.bar.doc.horizontal"),
+                    MoreSection(destination: .calendar, title: "Календарь", icon: "calendar"),
+                    MoreSection(destination: .marketBehavior, title: "Market Behavior", icon: "waveform.path.ecg"),
+                    MoreSection(destination: .algorithmMonitor, title: "Algorithm Monitor", icon: "chart.line.uptrend.xyaxis"),
+                    MoreSection(destination: .entryHours, title: "Часы входа", icon: "square.grid.3x3"),
+                    MoreSection(destination: .tags, title: "Теги", icon: "tag"),
+                    MoreSection(destination: .benchmark, title: "Бенчмарк", icon: "chart.xyaxis.line"),
+                    MoreSection(destination: .tradeDuration, title: "Время в сделке", icon: "hourglass"),
+                    MoreSection(destination: .report, title: "Отчёты PDF", icon: "doc.text"),
+                    MoreSection(destination: .achievements, title: "Достижения", icon: "trophy")
                 ]
             ),
             MoreGroup(
                 id: "review",
                 title: "Разбор и знания",
-                tiles: [
-                    MoreTile(
-                        destination: .secondBrain,
-                        title: "Second Brain",
-                        subtitle: "Наблюдения, гипотезы, правила",
-                        icon: "brain.head.profile"
-                    ),
-                    MoreTile(
-                        destination: .journal,
-                        title: "Дневник",
-                        subtitle: "Состояние и выводы дня",
-                        icon: "book.closed"
-                    ),
-                    MoreTile(
+                sections: [
+                    MoreSection(destination: .secondBrain, title: "Second Brain", icon: "brain.head.profile"),
+                    MoreSection(destination: .adviceJournal, title: "Советы", icon: "lightbulb"),
+                    MoreSection(destination: .playbook, title: "Плейбук", icon: "rectangle.stack"),
+                    MoreSection(destination: .training, title: "Тренировка входа", icon: "target"),
+                    MoreSection(destination: .journal, title: "Дневник", icon: "book.closed"),
+                    MoreSection(
                         destination: .errors,
                         title: "Ошибки",
-                        subtitle: awaitingErrors > 0
-                            ? "Ждут разбора: \(awaitingErrors)"
-                            : "Что нарушило систему",
                         icon: "exclamationmark.bubble",
                         badge: awaitingErrors > 0 ? "\(awaitingErrors)" : nil
                     )
                 ]
             ),
             MoreGroup(
-                id: "system",
-                title: "Система",
-                tiles: [
-                    MoreTile(
-                        destination: .system,
-                        title: "Конструктор",
-                        subtitle: "TDA + Risk: этапы и риск",
-                        icon: "square.grid.2x2"
-                    ),
-                    MoreTile(
-                        destination: .profiles,
-                        title: "Профили",
-                        subtitle: "Системы трейдеров и риск",
-                        icon: "person.2"
-                    ),
-                    MoreTile(
-                        destination: .levels,
-                        title: "Key Levels",
-                        subtitle: "Рабочие уровни дня",
-                        icon: "square.stack.3d.up"
-                    ),
-                    MoreTile(
+                id: "tools",
+                title: "Инструменты и данные",
+                sections: [
+                    MoreSection(destination: .terminal, title: "Терминал", icon: "chart.bar.xaxis"),
+                    MoreSection(destination: .charts, title: "Графики TradingView", icon: "chart.xyaxis.line"),
+                    MoreSection(destination: .worldEconomy, title: "Мировая экономика", icon: "globe.europe.africa"),
+                    MoreSection(destination: .bankRates, title: "Ставки банков", icon: "banknote"),
+                    MoreSection(destination: .system, title: "Конструктор", icon: "square.grid.2x2"),
+                    MoreSection(destination: .profiles, title: "Профили", icon: "person.2"),
+                    MoreSection(destination: .levels, title: "Key Levels", icon: "square.stack.3d.up"),
+                    MoreSection(
                         destination: .accounts,
                         title: "Счета",
-                        subtitle: openTrades > 0
-                            ? "Открытых сделок: \(openTrades)"
-                            : "Баланс, операции, выплаты",
-                        icon: "creditcard"
-                    )
-                ]
-            ),
-            MoreGroup(
-                id: "service",
-                title: "Сервис",
-                tiles: [
-                    MoreTile(
-                        destination: .assistant,
-                        title: "ИИ-ассистент",
-                        subtitle: "Разбор сделок и системы",
-                        icon: "sparkles"
+                        icon: "creditcard",
+                        badge: openTrades > 0 ? "\(openTrades)" : nil
                     ),
-                    MoreTile(
-                        destination: .settings,
-                        title: "Настройки",
-                        subtitle: "Риск, лимиты, данные, ключи",
-                        icon: "gearshape"
-                    )
+                    MoreSection(destination: .csvImport, title: "Импорт из CSV", icon: "square.and.arrow.down"),
+                    MoreSection(destination: .assistant, title: "ИИ-ассистент", icon: "sparkles"),
+                    MoreSection(destination: .settings, title: "Настройки", icon: "gearshape")
                 ]
             )
         ]
-    }
-
-    private var filteredGroups: [MoreGroup] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return groups }
-        return groups.compactMap { group in
-            let tiles = group.tiles.filter {
-                $0.title.localizedCaseInsensitiveContains(query)
-                    || $0.subtitle.localizedCaseInsensitiveContains(query)
-            }
-            return tiles.isEmpty ? nil : MoreGroup(id: group.id, title: group.title, tiles: tiles)
-        }
     }
 
     var body: some View {
@@ -267,27 +177,23 @@ struct MoreView: View {
             AppBackground()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 16) {
                     header
-                    searchEntry
                     searchRow
 
-                    ForEach(filteredGroups) { group in
-                        VStack(alignment: .leading, spacing: 8) {
-                            SectionLabel(text: group.title)
-                            groupGrid(group)
+                    ForEach(groups) { group in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 6) {
+                                SectionLabel(text: group.title)
+                                Spacer(minLength: 0)
+                                Text("\(group.sections.count)")
+                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                    .monospacedDigit()
+                                    .foregroundStyle(Theme.textTertiary)
+                            }
+                            groupCard(group)
                         }
                     }
-
-                    if filteredGroups.isEmpty {
-                        emptySearch
-                    }
-
-                    Text("Все разделы живут в одной базе и синхронизируются через iCloud.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 8)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
@@ -299,39 +205,6 @@ struct MoreView: View {
         }
     }
 
-    @ViewBuilder
-    private func groupGrid(_ group: MoreGroup) -> some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 8) {
-                groupTiles(group)
-            }
-        } else {
-            groupTiles(group)
-        }
-    }
-
-    private func groupTiles(_ group: MoreGroup) -> some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ],
-            spacing: 8
-        ) {
-            ForEach(group.tiles, id: \.destination.rawValue) { tile in
-                SectionTile(
-                    title: tile.title,
-                    subtitle: tile.subtitle,
-                    icon: tile.icon,
-                    badge: tile.badge
-                ) {
-                    destination = tile.destination
-                    Haptics.tap()
-                }
-            }
-        }
-    }
-
     // MARK: - Header
 
     private var header: some View {
@@ -339,7 +212,7 @@ struct MoreView: View {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(text: "Структура приложения")
                 ScreenTitle(text: "Все разделы")
-                Text("Риск, результаты, разбор, система и сервис — сгруппированы по смыслу.")
+                Text("Всё приложение в четырёх группах — от капитала до данных.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -362,94 +235,92 @@ struct MoreView: View {
         }
     }
 
-    /// Вход в глобальный поиск по всей базе.
-    private var searchEntry: some View {
+    private var searchRow: some View {
         Button {
-            destination = .search
-            Haptics.tap()
+            open(.search)
         } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.10))
-                        .frame(width: 38, height: 38)
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 24, alignment: .leading)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Поиск по базе")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text("Сделки, планы, Second Brain, ошибки и дневник")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.textSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+                Text("Поиск по всей базе")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
 
                 Spacer(minLength: 6)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textTertiary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .glassCard(cornerRadius: 20, interactive: true)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassCard(cornerRadius: 16, interactive: true)
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle())
     }
 
-    private var searchRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.textSecondary)
-
-            TextField("Найти раздел", text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .foregroundStyle(.white)
-                .tint(Theme.accent)
-
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.textTertiary)
+    private func groupCard(_ group: MoreGroup) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(group.sections.enumerated()), id: \.element.id) { index, section in
+                if index > 0 {
+                    Divider()
+                        .overlay(Color.white.opacity(0.06))
+                        .padding(.leading, 48)
                 }
-                .buttonStyle(.plain)
+
+                row(section, index: index)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
-        )
+        .glassCard(cornerRadius: 20)
     }
 
-    private var emptySearch: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Раздел не найден")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
-            Text("Попробуйте другое слово — например «риск», «отчёт» или «дневник».")
-                .font(.system(size: 12.5))
-                .foregroundStyle(Theme.textSecondary)
+    private func row(_ section: MoreSection, index: Int) -> some View {
+        Button {
+            open(section.destination)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: section.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 24, alignment: .leading)
+                    .iconPop(delay: 0.2 + Double(min(index, 9)) * 0.05)
+
+                Text(section.title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+                    .pieceIn(delay: 0.45 + Double(min(index, 9)) * 0.06)
+
+                Spacer(minLength: 6)
+
+                if let badge = section.badge {
+                    Text(badge)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.background)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.accent))
+                }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .glassCard(cornerRadius: 20)
+        .buttonStyle(PressableButtonStyle())
+    }
+
+    private func open(_ destination: MoreDestination) {
+        self.destination = destination
+        Haptics.tap()
     }
 
     // MARK: - Destinations
@@ -459,8 +330,34 @@ struct MoreView: View {
         switch destination {
         case .search:
             SearchView()
+        case .terminal:
+            TerminalView()
         case .charts:
             TradingChartsView()
+        case .worldEconomy:
+            WorldEconomyView()
+        case .bankRates:
+            BankRatesLogView()
+        case .portfolio:
+            PortfolioView()
+        case .equityCurve:
+            EquityCurveView()
+        case .capitalDiscipline:
+            CapitalDisciplineView()
+        case .compliance:
+            ComplianceView()
+        case .committeeAgenda:
+            CommitteeAgendaView()
+        case .systemVersions:
+            SystemVersionsView()
+        case .setupWeights:
+            SetupWeightsView()
+        case .disciplineSystem:
+            DisciplineSystemView()
+        case .correlations:
+            CorrelationView()
+        case .monteCarlo:
+            MonteCarloView()
         case .riskLadder:
             RiskLadderView()
         case .riskIntelligence:
@@ -471,12 +368,18 @@ struct MoreView: View {
             MonthlyPerformanceView()
         case .weeklyPerformance:
             WeeklyPerformanceView()
+        case .calendar:
+            CalendarView()
         case .marketBehavior:
             MarketBehaviorView()
         case .algorithmMonitor:
             AlgorithmMonitorView()
         case .entryHours:
             EntryHoursView()
+        case .tags:
+            TagStatsView()
+        case .benchmark:
+            BenchmarkView()
         case .tradeDuration:
             TradeDurationView()
         case .report:
@@ -485,6 +388,12 @@ struct MoreView: View {
             AchievementsView()
         case .secondBrain:
             SecondBrainView()
+        case .adviceJournal:
+            AdviceJournalView()
+        case .playbook:
+            PlaybookView()
+        case .training:
+            EntryTrainingView()
         case .journal:
             JournalView()
         case .errors:
@@ -499,6 +408,8 @@ struct MoreView: View {
             LevelsView()
         case .accounts:
             AccountsView()
+        case .csvImport:
+            CSVImportView()
         case .assistant:
             AssistantView()
         case .settings:

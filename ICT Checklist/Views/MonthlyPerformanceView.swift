@@ -47,6 +47,8 @@ private struct MonthlyPerformanceContent: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var showAssistant = false
+    @AppStorage("monthReport.resolution") private var resolutionRaw = ImageExportResolution.high.rawValue
+    @AppStorage("monthReport.customWidth") private var customWidth = 1800.0
 
     var body: some View {
         ZStack {
@@ -80,8 +82,10 @@ private struct MonthlyPerformanceContent: View {
                             .reveal(.rise, 8)
                         assistantCard
                             .reveal(.rise, 9)
+                        shareCard
+                            .reveal(.rise, 10)
                         hintCard
-                            .reveal(.blur, 10)
+                            .reveal(.blur, 11)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -632,6 +636,137 @@ private struct MonthlyPerformanceContent: View {
         }
         .padding(14)
         .glassCard(cornerRadius: 22)
+    }
+
+    // MARK: - Share
+
+    private var resolution: ImageExportResolution {
+        ImageExportResolution(rawValue: resolutionRaw) ?? .high
+    }
+
+    private var pixelWidth: CGFloat {
+        if let preset = resolution.pixelWidth {
+            return preset
+        }
+        let clamped = min(
+            max(CGFloat(customWidth), MonthReportImage.minPixelWidth),
+            MonthReportImage.maxPixelWidth
+        )
+        return (clamped / 60).rounded() * 60
+    }
+
+    private var customWidthBinding: Binding<Double> {
+        Binding(
+            get: { Double(pixelWidth) },
+            set: { customWidth = $0 }
+        )
+    }
+
+    private var shareCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                SectionLabel(text: "Картинка месяца")
+                Spacer(minLength: 8)
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            Text("Одна картинка с оценкой, результатом в R, win rate, лучшим и худшим днём и вердиктом месяца — для чата или сторис.")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            resolutionRow
+
+            if resolution == .custom {
+                customWidthRow
+            }
+
+            SecondaryButton(title: "Поделиться картинкой") {
+                Task { @MainActor in shareImage() }
+            }
+        }
+        .padding(14)
+        .glassCard(cornerRadius: 22)
+    }
+
+    private var resolutionRow: some View {
+        HStack(spacing: 10) {
+            Text("Разрешение")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.82))
+
+            Spacer(minLength: 8)
+
+            Menu {
+                ForEach(ImageExportResolution.allCases) { option in
+                    Button {
+                        resolutionRaw = option.rawValue
+                        Haptics.select()
+                    } label: {
+                        if option == resolution {
+                            Label("\(option.title) · \(option.note)", systemImage: "checkmark")
+                        } else {
+                            Text("\(option.title) · \(option.note)")
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("\(resolution.title) · \(Int(pixelWidth)) px")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .monospacedDigit()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(Color.white.opacity(0.08)))
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.10)))
+            }
+        }
+    }
+
+    private var customWidthRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Ширина картинки")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer(minLength: 8)
+                Text("\(Int(pixelWidth)) px")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+            }
+
+            Slider(value: customWidthBinding, in: 720...4320, step: 60)
+                .tint(Theme.textPrimary)
+
+            Text("Чем выше разрешение, тем крупнее файл — зато картинка остаётся резкой при увеличении и печати.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
+    }
+
+    @MainActor
+    private func shareImage() {
+        guard let url = MonthReportImage.make(report, pixelWidth: pixelWidth) else {
+            SharePresenter.presentFailure("Не удалось собрать картинку месяца.")
+            Haptics.warning()
+            return
+        }
+
+        Haptics.success()
+        SharePresenter.share([url])
     }
 
     // MARK: - Hints

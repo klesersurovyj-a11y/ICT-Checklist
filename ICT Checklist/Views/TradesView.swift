@@ -39,6 +39,10 @@ struct TradesView: View {
     @State private var filter: TradeFilter = .all
     @State private var activeSheet: TradesSheet?
     @State private var activeCover: TradesCover?
+    @State private var heroTrade: Trade?
+    @State private var heroPlan: TradePlan?
+    @State private var heroExpanded = false
+    @State private var heroFrame: CGRect = .zero
 
     private enum TradesCover: Identifiable {
         case gallery(Trade)
@@ -234,7 +238,40 @@ struct TradesView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 32)
             }
+
+            if heroTrade != nil || heroPlan != nil {
+                GeometryReader { proxy in
+                    let origin = proxy.frame(in: .global)
+
+                    ZStack {
+                        Color.black
+                            .opacity(heroExpanded ? 1 : 0)
+                            .ignoresSafeArea()
+                            .onTapGesture { closeHero() }
+
+                        if let trade = heroTrade {
+                            heroSurface(
+                                TradeDetailView(
+                                    trade: trade,
+                                    usedTags: usedTags,
+                                    onClose: { closeHero() }
+                                ),
+                                proxy: proxy,
+                                origin: origin
+                            )
+                        } else if let plan = heroPlan {
+                            heroSurface(
+                                PlanView(plan: plan, onClose: { closeHero() }),
+                                proxy: proxy,
+                                origin: origin
+                            )
+                        }
+                    }
+                }
+                .zIndex(30)
+            }
         }
+        .toolbar(heroTrade == nil ? .visible : .hidden, for: .tabBar)
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
             case .filters:
@@ -337,9 +374,8 @@ struct TradesView: View {
     }
 
     private func planCard(_ plan: TradePlan) -> some View {
-        Button {
-            activeCover = .plan(plan)
-            Haptics.tap()
+        TradeCardButton(id: heroID(plan)) { _, frame in
+            openHero(plan, from: frame)
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
@@ -399,7 +435,7 @@ struct TradesView: View {
             .glassCard(cornerRadius: 24)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .opacity(heroPlan?.persistentModelID == plan.persistentModelID ? 0 : 1)
     }
 
     private func miniPill(_ title: String, tint: Color) -> some View {
@@ -454,7 +490,7 @@ struct TradesView: View {
         )
         context.insert(plan)
         try? context.save()
-        activeCover = .plan(plan)
+        openHero(plan, from: .zero)
         Haptics.success()
     }
 
@@ -707,21 +743,165 @@ struct TradesView: View {
     // MARK: - Cards
 
     private func card(for trade: Trade) -> some View {
-        Button {
-            activeCover = .trade(trade)
-            Haptics.tap()
+        TradeCardButton(id: heroID(trade)) { _, frame in
+            openHero(trade, from: frame)
         } label: {
-            Group {
-                if trade.result == .open {
-                    openCard(trade)
-                } else {
-                    closedCard(trade)
+            VStack(alignment: .leading, spacing: 8) {
+                systemBadge(trade)
+
+                Group {
+                    if trade.result == .open {
+                        openCard(trade)
+                    } else {
+                        closedCard(trade)
+                    }
                 }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .opacity(heroTrade?.persistentModelID == trade.persistentModelID ? 0 : 1)
         .cardEntrance()
+    }
+
+    @ViewBuilder
+    private func systemBadge(_ trade: Trade) -> some View {
+        let checked = trade.checkedChecks.count
+        let verdict = trade.memoVerdict
+        let showSystem = trade.checklistComplete || checked > 0
+
+        if showSystem || verdict != .none {
+            HStack(spacing: 6) {
+                if trade.checklistComplete {
+                    systemPill("ПО СИСТЕМЕ", tint: Theme.green, icon: "checkmark.seal.fill")
+                } else if checked > 0 {
+                    systemPill(
+                        "ВНЕ СИСТЕМЫ · \(checked)/\(TradeCheck.allCases.count)",
+                        tint: Theme.orange,
+                        icon: "exclamationmark.triangle.fill"
+                    )
+                }
+
+                if verdict != .none {
+                    systemPill(
+                        "КОМИТЕТ: \(verdict.title.uppercased())",
+                        tint: verdict.tint,
+                        icon: verdict.icon
+                    )
+                }
+
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func systemPill(_ text: String, tint: Color, icon: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 8, weight: .bold))
+            Text(text)
+                .font(.system(size: 9, weight: .bold))
+                .tracking(0.4)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(tint.opacity(0.12)))
+    }
+
+    private func heroID(_ trade: Trade) -> String {
+        "trade-hero-\(trade.persistentModelID.hashValue)"
+    }
+
+    private func heroID(_ plan: TradePlan) -> String {
+        "plan-hero-\(plan.persistentModelID.hashValue)"
+    }
+
+    private func openHero(_ trade: Trade, from frame: CGRect) {
+        heroFrame = frame
+        heroTrade = trade
+        heroPlan = nil
+        heroExpanded = false
+        Haptics.tap()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) {
+                heroExpanded = true
+            }
+        }
+    }
+
+    private func openHero(_ plan: TradePlan, from frame: CGRect) {
+        heroFrame = frame
+        heroPlan = plan
+        heroTrade = nil
+        heroExpanded = false
+        Haptics.tap()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) {
+                heroExpanded = true
+            }
+        }
+    }
+
+    private func closeHero() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+            heroExpanded = false
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 340_000_000)
+            heroTrade = nil
+            heroPlan = nil
+        }
+    }
+
+    private func heroSurface<Content: View>(
+        _ content: Content,
+        proxy: GeometryProxy,
+        origin: CGRect
+    ) -> some View {
+        let start = heroFrame == .zero
+            ? CGRect(
+                x: proxy.size.width / 2 - 60,
+                y: proxy.size.height / 2 - 40,
+                width: 120,
+                height: 80
+            )
+            : heroFrame
+
+        return content
+            .mask {
+                RoundedRectangle(
+                    cornerRadius: heroExpanded ? 0 : 22,
+                    style: .continuous
+                )
+                .frame(
+                    width: heroExpanded ? proxy.size.width : max(start.width, 1),
+                    height: heroExpanded ? proxy.size.height : max(start.height, 1)
+                )
+                .position(
+                    x: heroExpanded
+                        ? proxy.size.width / 2
+                        : start.midX - origin.minX,
+                    y: heroExpanded
+                        ? proxy.size.height / 2
+                        : start.midY - origin.minY
+                )
+            }
+            .shadow(color: .black.opacity(heroExpanded ? 0.6 : 0), radius: 28, x: 0, y: 12)
+            .opacity(heroExpanded ? 1 : 0.15)
+            .allowsHitTesting(heroExpanded)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 40)
+                    .onEnded { value in
+                        guard heroExpanded else { return }
+                        let vertical = value.translation.height
+                        let horizontal = abs(value.translation.width)
+                        if vertical > 150, horizontal < 90, vertical > horizontal * 1.6 {
+                            closeHero()
+                        }
+                    }
+            )
     }
 
     private func openCard(_ trade: Trade) -> some View {
@@ -939,6 +1119,9 @@ struct TradesView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 10) {
+            BreathingGlyph(systemName: hasAnyQuery ? "magnifyingglass" : "list.bullet.rectangle")
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
             Text(emptyTitle)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
@@ -1129,6 +1312,7 @@ struct TradeCloseSheet: View {
 
         try? context.save()
         LadderEngine.sync(context: context)
+        TradeReviewReminder.schedule(for: trade, context: context)
         GoalReminder.check(context: context)
         DailyLimitReminder.check(context: context)
 
@@ -1376,5 +1560,50 @@ private struct TradeFiltersSheet: View {
             selectedTags.insert(tag)
         }
         Haptics.select()
+    }
+}
+
+
+// MARK: - Кнопка карточки с её рамкой
+
+/// Карточка, которая знает свою рамку на экране: из неё раскрывается детальный экран.
+private struct TradeCardButton<Label: View>: View {
+    let id: String
+    let onOpen: (String, CGRect) -> Void
+    private let label: Label
+
+    @State private var frame: CGRect = .zero
+
+    init(
+        id: String,
+        onOpen: @escaping (String, CGRect) -> Void,
+        @ViewBuilder label: () -> Label
+    ) {
+        self.id = id
+        self.onOpen = onOpen
+        self.label = label()
+    }
+
+    var body: some View {
+        Button {
+            onOpen(id, frame)
+        } label: {
+            label
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear {
+                        frame = proxy.frame(in: .global)
+                    }
+                    .onChange(of: proxy.frame(in: .global)) { _, newValue in
+                        if abs(newValue.midY - frame.midY) > 0.5 || abs(newValue.minX - frame.minX) > 0.5 {
+                            frame = newValue
+                        }
+                    }
+                    .allowsHitTesting(false)
+            }
+        )
     }
 }

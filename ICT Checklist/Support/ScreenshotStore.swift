@@ -30,7 +30,7 @@ enum ScreenshotStore {
         try? FileManager.default.removeItem(at: url(for: fileName))
     }
 
-    /// New screenshots live in SwiftData (and sync through iCloud);
+    /// New screenshots live in SwiftData on this device;
     /// screenshots taken before that change are still files on disk.
     static func image(for shot: TradeShot) -> UIImage? {
         if let data = shot.imageData, let image = UIImage(data: data) {

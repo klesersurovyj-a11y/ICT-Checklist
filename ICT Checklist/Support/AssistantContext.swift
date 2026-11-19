@@ -119,6 +119,9 @@ enum AssistantContext {
                 if !trade.note.isEmpty {
                     line += " · заметка: \(short(trade.note))"
                 }
+                if trade.memoVerdict != .none {
+                    line += " · комитет: \(trade.memoVerdict.title.lowercased())"
+                }
                 lines.append(line)
             }
         }
@@ -154,6 +157,46 @@ enum AssistantContext {
             }.joined(separator: " · ")
             lines.append("SECOND BRAIN (последние записи): \(list)")
         }
+        let errors = (try? context.fetch(
+            FetchDescriptor<ErrorNote>(sortBy: [SortDescriptor(\ErrorNote.updatedAt, order: .reverse)])
+        )) ?? []
+        if !errors.isEmpty {
+            let list = errors.prefix(6).map { note in
+                let cost = note.sortedTrades.reduce(0) { $0 + $1.actualR }
+                return "\(note.title) [\(note.status.rawValue)] \(note.trades.count) сделок \(Fmt.r(cost))"
+            }.joined(separator: " · ")
+            lines.append("ОШИБКИ: всего \(errors.count) · \(list)")
+        }
+
+        let missingReviews = closed.filter { $0.review == nil }.count
+        lines.append("РАЗБОРЫ: не заполнено \(missingReviews) из \(closed.count) закрытых")
+
+        let bySystem = closed.filter { $0.checklistComplete }.count
+        lines.append("ДИСЦИПЛИНА: чек-лист сделки закрыт у \(bySystem) из \(closed.count) закрытых")
+
+        let memoApproved = closed.filter { $0.memoVerdict == .approved }.count
+        let memoRejected = closed.filter { $0.memoVerdict == .rejected }.count
+        let memoOpen = trades.filter { $0.result == .open && $0.memoVerdict == .approved }.count
+        if memoApproved + memoRejected > 0 || memoOpen > 0 {
+            lines.append(
+                "КОМИТЕТ: утверждено \(memoApproved) закрытых · отклонено \(memoRejected) · утверждено в открытых \(memoOpen)"
+            )
+        }
+
+        if !plans.isEmpty {
+            let incomplete = plans.filter { !$0.isChecklistComplete }.count
+            lines.append("ДИСЦИПЛИНА ПЛАНОВ: \(plans.count) планов, неполный чек-лист у \(incomplete)")
+        }
+
+        let window = CapitalFlows.rebalancingWindow()
+        lines.append("БАНКИ И ПОТОКИ:")
+        for item in CapitalFlows.allProfiles {
+            lines.append(
+                "\(item.region.rawValue) · \(item.policy.bank) · \(item.biasTitle) · ставка \(item.policy.metrics.policyRate) · ожидания: \(item.policy.expected.direction) · через месяц: \(item.policy.expected.oneMonth) · расхождение: \(item.policy.divergenceTitle) · сила валюты: \(item.policy.bias.label) · для валюты: \(item.policy.currencyEffect)"
+            )
+        }
+        lines.append("ОКНО РЕБАЛАНСА: \(window.label)")
+
         lines.append("ЗАПИСЕЙ В БАЗЕ ЗНАНИЙ: \(notes.count)")
 
         return Snapshot(

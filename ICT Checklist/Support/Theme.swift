@@ -75,18 +75,77 @@ extension BrainStatus {
     }
 }
 
+/// Живой фон из прежней версии: та же фотография, медленно дышит.
 struct AppBackground: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var tilt = ParallaxTilt.shared
+    @State private var phase: CGFloat = 0
+
     var body: some View {
         ZStack {
             Theme.background
 
-            GeometryReader { proxy in
-                Image(Theme.backgroundImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
+            ZStack {
+                GeometryReader { proxy in
+                    Image(Theme.backgroundImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .scaleEffect(reduceMotion ? 1 : 1.05 + phase * 0.07)
+                        .offset(
+                            x: reduceMotion ? 0 : (phase - 0.5) * 26,
+                            y: reduceMotion ? 0 : (0.5 - phase) * 20
+                        )
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 18).repeatForever(autoreverses: true),
+                            value: phase
+                        )
+                }
+
+                GeometryReader { proxy in
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Color.white.opacity(0.12), Color.white.opacity(0.0)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 200
+                            )
+                        )
+                        .frame(width: 420, height: 420)
+                        .offset(x: -80 + phase * 120, y: -150 + phase * 90)
+                        .blur(radius: 24)
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 14).repeatForever(autoreverses: true),
+                            value: phase
+                        )
+
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Theme.green.opacity(0.06), Theme.green.opacity(0.0)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 220
+                            )
+                        )
+                        .frame(width: 460, height: 460)
+                        .offset(
+                            x: proxy.size.width - 300 - phase * 70,
+                            y: proxy.size.height * 0.48 + phase * 50
+                        )
+                        .blur(radius: 30)
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 19).repeatForever(autoreverses: true),
+                            value: phase
+                        )
+                }
             }
+            .offset(
+                x: reduceMotion ? 0 : CGFloat(tilt.offset.width) * 14,
+                y: reduceMotion ? 0 : -CGFloat(tilt.offset.height) * 10
+            )
+            .animation(reduceMotion ? nil : .linear(duration: 0.2), value: tilt.offset)
 
             LinearGradient(
                 colors: [
@@ -99,9 +158,18 @@ struct AppBackground: View {
             )
         }
         .ignoresSafeArea()
+        .onAppear {
+            tilt.acquire()
+            guard !reduceMotion else { return }
+            phase = 1
+        }
+        .onDisappear {
+            tilt.release()
+        }
     }
 }
 
+/// Карточка из стекла, без обводки.
 struct GlassCardModifier: ViewModifier {
     var cornerRadius: CGFloat = 22
     var interactive: Bool = false
@@ -110,41 +178,32 @@ struct GlassCardModifier: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(
-                    interactive ? .regular.interactive() : .regular,
-                    in: .rect(cornerRadius: radius)
-                )
-        } else {
-            content
-                .background {
-                    RoundedRectangle(cornerRadius: radius, style: .continuous)
-                        .fill(Theme.surface.opacity(0.45))
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.015)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+        Group {
+            if #available(iOS 26.0, *) {
+                content
+                    .glassEffect(
+                        interactive ? .regular.interactive() : .regular,
+                        in: .rect(cornerRadius: radius)
+                    )
+            } else {
+                content
+                    .background {
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .fill(Theme.surface.opacity(0.45))
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.white.opacity(0.08), Color.white.opacity(0.015)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                )
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                                .strokeBorder(
-                                    LinearGradient(
-                                        colors: [Color.white.opacity(0.24), Color.white.opacity(0.06)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.9
-                                )
-                        }
-                }
-                .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 6)
+                            }
+                    }
+                    .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 6)
+            }
         }
     }
 }
@@ -154,7 +213,6 @@ extension View {
         modifier(GlassCardModifier(cornerRadius: cornerRadius, interactive: interactive))
     }
 
-    /// Нативная стеклянная поверхность для кнопок, сегментов и плиток.
     @ViewBuilder
     func glassPanel(cornerRadius: CGFloat = 16, interactive: Bool = false) -> some View {
         if #available(iOS 26.0, *) {
@@ -175,7 +233,6 @@ extension View {
         }
     }
 
-    /// Стеклянная капсула — как у системных чипов iOS.
     @ViewBuilder
     func glassCapsule(interactive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
@@ -190,7 +247,6 @@ extension View {
         }
     }
 
-    /// Круглая стеклянная иконочная кнопка.
     @ViewBuilder
     func glassCircle(interactive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
@@ -206,7 +262,6 @@ extension View {
     }
 }
 
-/// Мягкое появление блока при открытии экрана.
 struct CardEntranceModifier: ViewModifier {
     var index: Int = 0
 
@@ -215,11 +270,11 @@ struct CardEntranceModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 12)
+            .offset(y: appeared ? 0 : 14)
             .onAppear {
                 withAnimation(
-                    .spring(response: 0.45, dampingFraction: 0.9)
-                        .delay(Double(min(index, 8)) * 0.03)
+                    .spring(response: 0.9, dampingFraction: 0.9)
+                        .delay(Double(min(index, 8)) * 0.06)
                 ) {
                     appeared = true
                 }
@@ -233,6 +288,7 @@ extension View {
     }
 }
 
+/// Надзаголовок раздела — одна строка, без разбивки на буквы.
 struct SectionLabel: View {
     let text: String
 
@@ -241,18 +297,39 @@ struct SectionLabel: View {
             .font(.system(size: 9.5, weight: .semibold))
             .tracking(1.8)
             .foregroundStyle(Theme.textTertiary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .pieceIn(delay: 0.2)
     }
 }
 
+/// Заголовок печатается медленно, без курсора.
 struct ScreenTitle: View {
     let text: String
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var visibleCount = 0
+
     var body: some View {
-        Text(text)
+        Text(String(text.prefix(max(visibleCount, 0))))
             .font(.system(size: 26, weight: .semibold))
             .tracking(-0.6)
             .foregroundStyle(Theme.textPrimary)
             .minimumScaleFactor(0.65)
             .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .task(id: text) {
+                if reduceMotion {
+                    visibleCount = text.count
+                    return
+                }
+                visibleCount = 0
+                try? await Task.sleep(nanoseconds: 360_000_000)
+                for index in 1...max(text.count, 1) {
+                    try? await Task.sleep(nanoseconds: 62_000_000)
+                    guard !Task.isCancelled else { return }
+                    visibleCount = index
+                }
+            }
     }
 }

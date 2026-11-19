@@ -15,7 +15,32 @@ struct SecondBrainView: View {
     @State private var kindFilter: BrainKind? = nil
     @State private var statusFilter: BrainStatus? = nil
     @State private var searchText = ""
-    @State private var activeNote: BrainNote?
+    @State private var heroNote: BrainNote?
+    @State private var heroExpanded = false
+    @State private var heroFrame: CGRect = .zero
+
+    private func openHero(_ note: BrainNote, from frame: CGRect) {
+        heroFrame = frame
+        heroNote = note
+        heroExpanded = false
+        Haptics.tap()
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 16_000_000)
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) {
+                heroExpanded = true
+            }
+        }
+    }
+
+    private func closeHero() {
+        withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+            heroExpanded = false
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 340_000_000)
+            heroNote = nil
+        }
+    }
 
     private var filteredNotes: [BrainNote] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -106,8 +131,58 @@ struct SecondBrainView: View {
                 .padding(.bottom, 40)
             }
         }
-        .fullScreenCover(item: $activeNote) { note in
-            BrainNoteView(note: note)
+        .overlay {
+            if let note = heroNote {
+                GeometryReader { proxy in
+                    let origin = proxy.frame(in: .global)
+                    let start = heroFrame == .zero
+                        ? CGRect(
+                            x: proxy.size.width / 2 - 60,
+                            y: proxy.size.height / 2 - 40,
+                            width: 120,
+                            height: 80
+                        )
+                        : heroFrame
+
+                    ZStack {
+                        Color.black
+                            .opacity(heroExpanded ? 1 : 0)
+                            .ignoresSafeArea()
+                            .onTapGesture { closeHero() }
+
+                        BrainNoteView(note: note, onClose: { closeHero() })
+                            .mask {
+                                RoundedRectangle(
+                                    cornerRadius: heroExpanded ? 0 : 22,
+                                    style: .continuous
+                                )
+                                .frame(
+                                    width: heroExpanded ? proxy.size.width : max(start.width, 1),
+                                    height: heroExpanded ? proxy.size.height : max(start.height, 1)
+                                )
+                                .position(
+                                    x: heroExpanded ? proxy.size.width / 2 : start.midX - origin.minX,
+                                    y: heroExpanded ? proxy.size.height / 2 : start.midY - origin.minY
+                                )
+                            }
+                            .shadow(color: .black.opacity(heroExpanded ? 0.6 : 0), radius: 28, x: 0, y: 12)
+                            .opacity(heroExpanded ? 1 : 0.15)
+                            .allowsHitTesting(heroExpanded)
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 40)
+                                    .onEnded { value in
+                                        guard heroExpanded else { return }
+                                        let vertical = value.translation.height
+                                        let horizontal = abs(value.translation.width)
+                                        if vertical > 150, horizontal < 90, vertical > horizontal * 1.6 {
+                                            closeHero()
+                                        }
+                                    }
+                            )
+                    }
+                }
+                .zIndex(30)
+            }
         }
     }
 
@@ -352,7 +427,7 @@ struct SecondBrainView: View {
         let note = BrainNote(kind: kind)
         context.insert(note)
         try? context.save()
-        activeNote = note
+        openHero(note, from: .zero)
         Haptics.success()
     }
 
@@ -443,9 +518,8 @@ struct SecondBrainView: View {
     // MARK: - Cards
 
     private func card(_ note: BrainNote) -> some View {
-        Button {
-            activeNote = note
-            Haptics.tap()
+        BrainCardButton(id: "\(note.persistentModelID.hashValue)") { _, frame in
+            openHero(note, from: frame)
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
@@ -527,7 +601,7 @@ struct SecondBrainView: View {
             .glassCard(cornerRadius: 22)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .opacity(heroNote?.persistentModelID == note.persistentModelID ? 0 : 1)
     }
 
     private func pillTitles(_ note: BrainNote) -> [String] {
@@ -546,6 +620,9 @@ struct SecondBrainView: View {
 
     private var emptyCard: some View {
         VStack(alignment: .leading, spacing: 8) {
+            BreathingGlyph(systemName: notes.isEmpty ? "brain.head.profile" : "magnifyingglass")
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, 6)
             Text(notes.isEmpty ? "Здесь пока пусто" : "Ничего не найдено")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
@@ -561,5 +638,50 @@ struct SecondBrainView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .glassCard(cornerRadius: 24)
+    }
+}
+
+
+// MARK: - Кнопка карточки с её рамкой
+
+/// Карточка базы знаний, которая знает свою рамку: из неё раскрывается заметка.
+private struct BrainCardButton<Label: View>: View {
+    let id: String
+    let onOpen: (String, CGRect) -> Void
+    private let label: Label
+
+    @State private var frame: CGRect = .zero
+
+    init(
+        id: String,
+        onOpen: @escaping (String, CGRect) -> Void,
+        @ViewBuilder label: () -> Label
+    ) {
+        self.id = id
+        self.onOpen = onOpen
+        self.label = label()
+    }
+
+    var body: some View {
+        Button {
+            onOpen(id, frame)
+        } label: {
+            label
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear {
+                        frame = proxy.frame(in: .global)
+                    }
+                    .onChange(of: proxy.frame(in: .global)) { _, newValue in
+                        if abs(newValue.midY - frame.midY) > 0.5 || abs(newValue.minX - frame.minX) > 0.5 {
+                            frame = newValue
+                        }
+                    }
+                    .allowsHitTesting(false)
+            }
+        )
     }
 }

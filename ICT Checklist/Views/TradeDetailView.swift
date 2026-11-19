@@ -15,6 +15,7 @@ struct TradeDetailView: View {
     @Environment(\.modelContext) private var context
 
     @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
+    @Query private var settingsList: [AppSettings]
 
     @ObservedObject private var prices = PriceBook.shared
 
@@ -26,6 +27,7 @@ struct TradeDetailView: View {
     @State private var showGallery = false
     @State private var showCycle = false
     @State private var showDuplicate = false
+    @State private var showMemo = false
     @State private var pickedItems: [PhotosPickerItem] = []
     @State private var createdNote: BrainNote?
 
@@ -56,6 +58,12 @@ struct TradeDetailView: View {
                     shotsSection
                         .reveal(.rise, 8)
                     noteCard
+                        .reveal(.rise, 9)
+
+                    checklistSection
+                        .reveal(.rise, 9)
+
+                    memoSection
                         .reveal(.rise, 9)
 
                     brainButton
@@ -101,7 +109,9 @@ struct TradeDetailView: View {
                 .presentationBackground(.ultraThinMaterial)
                 .presentationCornerRadius(32)
         }
-        .fullScreenCover(isPresented: $showReplay) {
+        .fullScreenCover(isPresented: $showReplay, onDismiss: {
+            TradeReviewReminder.refresh(context: context)
+        }) {
             TradeReplayView(trade: trade)
         }
         .fullScreenCover(isPresented: $showCharts) {
@@ -117,6 +127,13 @@ struct TradeDetailView: View {
         }
         .fullScreenCover(isPresented: $showDuplicate) {
             NewTradeView(prefillTrade: trade)
+        }
+        .sheet(isPresented: $showMemo) {
+            TradeMemoSheet(trade: trade, minRR: memoMinRR)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+                .presentationCornerRadius(32)
         }
         .fullScreenCover(item: $createdNote) { note in
             BrainNoteView(note: note)
@@ -217,9 +234,19 @@ struct TradeDetailView: View {
 
     // MARK: - Header
 
+    var onClose: (() -> Void)? = nil
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
+
     private var backButton: some View {
         Button {
-            dismiss()
+            close()
         } label: {
             Image(systemName: "chevron.left")
                 .font(.system(size: 15, weight: .semibold))
@@ -264,8 +291,10 @@ struct TradeDetailView: View {
                     .monospacedDigit()
                     .foregroundStyle(resultRTint)
                     .contentTransition(.numericText())
+                    .animation(.snappy(duration: 0.4), value: trade.actualR)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                    .verdictStamp(delay: 0.2)
             }
 
             Text(subtitle)
@@ -728,6 +757,140 @@ struct TradeDetailView: View {
 
     // MARK: - Note and cycle
 
+    private var checklistSection: some View {
+        TradeChecklistCard(
+            checks: trade.checkedChecks,
+            toggle: { item in
+                trade.toggleCheck(item)
+                try? context.save()
+                Haptics.select()
+            },
+            caption: trade.checklistComplete
+                ? "Все пункты закрыты: сделка прошла по системе."
+                : "Отметьте, что было подтверждено до входа. Незакрытые пункты — сделка вне системы."
+        )
+    }
+
+    // MARK: - Investment memo
+
+    private var memoMinRR: Double {
+        settingsList.first?.minRR ?? 2.0
+    }
+
+    private var memoOpenObjections: [RedTeamObjection] {
+        trade.memoObjections(minRR: memoMinRR)
+    }
+
+    private var memoSection: some View {
+        Button {
+            showMemo = true
+            Haptics.tap()
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(trade.memoVerdict.tint.opacity(0.16))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: trade.memoVerdict.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(trade.memoVerdict.tint)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Меморандум комитета")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text(memoSubtitle)
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(trade.memoVerdict.tint)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
+                if trade.hasMemoThesis {
+                    memoText("Тезис", trade.memoThesis)
+                }
+
+                if trade.hasMemoInvalidation {
+                    memoText("Инвалидация", trade.memoInvalidation)
+                }
+
+                if !trade.memoAnswers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    memoText("Ответ красной команде", trade.memoAnswers)
+                }
+
+                if !trade.memoRejectReason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    memoText("Причина отказа", trade.memoRejectReason)
+                }
+
+                if !trade.redTeamHistory.isEmpty {
+                    memoText(
+                        "По истории",
+                        "\(trade.redTeamHistory.count) возражений · \(trade.redTeamHistoryAnswered ? "ответы есть" : "есть без ответа")"
+                    )
+                }
+
+                if !trade.hasMemo {
+                    Text("Тезис, что в цене, сценарии A и B, инвалидация и ответы красной команде.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassCard(cornerRadius: 20)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var memoSubtitle: String {
+        if trade.memoVerdict != .none {
+            return trade.memoVerdict.title
+        }
+        guard !memoOpenObjections.isEmpty else {
+            return "Возражений нет — можно утвердить"
+        }
+        return "Красная команда: \(objectionCount(memoOpenObjections.count))"
+    }
+
+    private func objectionCount(_ count: Int) -> String {
+        let mod10 = count % 10
+        let mod100 = count % 100
+        if mod10 == 1 && mod100 != 11 {
+            return "\(count) возражение"
+        }
+        if (2...4).contains(mod10) && !(12...14).contains(mod100) {
+            return "\(count) возражения"
+        }
+        return "\(count) возражений"
+    }
+
+    private func memoText(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .tracking(1.0)
+                .foregroundStyle(Theme.textTertiary)
+            Text(value)
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
     private var noteCard: some View {
         let note = trade.note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1083,5 +1246,150 @@ struct TradeClassificationSheet: View {
         trade.poiRaw = value?.rawValue ?? ""
         try? context.save()
         Haptics.select()
+    }
+}
+
+
+// MARK: - Investment memo sheet
+
+private struct TradeMemoSheet: View {
+    let trade: Trade
+    let minRR: Double
+
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    @Query(sort: \Trade.entryDate, order: .reverse) private var allTrades: [Trade]
+
+    @State private var thesis = ""
+    @State private var pricedIn = ""
+    @State private var scenarios = ""
+    @State private var invalidation = ""
+    @State private var answers = ""
+    @State private var rejectReason = ""
+    @State private var verdictRaw = MemoVerdict.none.rawValue
+    @State private var replies: [String: String] = [:]
+    @State private var historyObjections: [RedTeamHistoryObjection] = []
+    @State private var didLoad = false
+
+    private var objections: [RedTeamObjection] {
+        InvestmentCommittee.objections(
+            thesis: thesis,
+            invalidation: invalidation,
+            checkedCount: trade.checkedChecks.count,
+            totalChecks: TradeCheck.allCases.count,
+            rr: trade.plannedRR,
+            minRR: minRR
+        )
+    }
+
+    var body: some View {
+        ZStack {
+            AppBackground()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    header
+                    checklistLine
+                    InvestmentMemoCard(
+                        thesis: $thesis,
+                        pricedIn: $pricedIn,
+                        scenarios: $scenarios,
+                        invalidation: $invalidation,
+                        answers: $answers,
+                        rejectReason: $rejectReason,
+                        verdictRaw: $verdictRaw,
+                        objections: objections,
+                        historyObjections: historyObjections,
+                        replies: $replies
+                    )
+                    PrimaryButton(title: "Сохранить меморандум") {
+                        persist()
+                        Haptics.success()
+                        dismiss()
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 28)
+            }
+        }
+        .onAppear(perform: load)
+        .onDisappear(perform: persist)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                SectionLabel(text: "Инвестиционный комитет")
+                Text("Меморандум сделки")
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("\(trade.symbol) · \(Fmt.shortDay(trade.tradingDay))")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("Закрыть") {
+                persist()
+                dismiss()
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(Theme.accent)
+        }
+    }
+
+    private var checklistLine: some View {
+        HStack(spacing: 8) {
+            Image(systemName: trade.checklistComplete ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(trade.checklistComplete ? Theme.green : Theme.orange)
+
+            Text("Чек-лист \(trade.checkedChecks.count)/\(TradeCheck.allCases.count) · RR \(Fmt.rr(trade.plannedRR)) против минимума \(Fmt.rr(minRR))")
+                .font(.system(size: 11.5))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func load() {
+        guard !didLoad else { return }
+        didLoad = true
+        thesis = trade.memoThesis
+        pricedIn = trade.memoPricedIn
+        scenarios = trade.memoScenarios
+        invalidation = trade.memoInvalidation
+        answers = trade.memoAnswers
+        rejectReason = trade.memoRejectReason
+        verdictRaw = trade.memoVerdictRaw.isEmpty ? MemoVerdict.none.rawValue : trade.memoVerdictRaw
+        replies = trade.redTeamReplies
+        let stored = trade.redTeamHistory
+        historyObjections = stored.isEmpty
+            ? RedTeamHistory.objections(
+                for: RedTeamHistory.draft(for: trade),
+                trades: allTrades,
+                excluding: trade
+            )
+            : stored
+    }
+
+    private func persist() {
+        guard didLoad else { return }
+        trade.memoThesis = thesis.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoPricedIn = pricedIn.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoScenarios = scenarios.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoInvalidation = invalidation.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoAnswers = answers.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoRejectReason = rejectReason.trimmingCharacters(in: .whitespacesAndNewlines)
+        trade.memoVerdictRaw = verdictRaw
+        trade.redTeamReplies = RedTeamHistory.cleaned(replies)
+        if trade.redTeamHistory.isEmpty, !historyObjections.isEmpty {
+            trade.redTeamHistory = historyObjections
+        }
+        try? context.save()
     }
 }

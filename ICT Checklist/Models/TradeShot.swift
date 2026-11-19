@@ -30,7 +30,7 @@ enum ShotRole: String, CaseIterable, Identifiable {
 final class TradeShot {
     /// Legacy name of the file written before screenshots moved into SwiftData.
     var fileName: String = ""
-    /// Screenshot itself, stored externally and mirrored to iCloud as an asset.
+    /// Screenshot itself, stored externally in the local store as an asset.
     @Attribute(.externalStorage) var imageData: Data?
     var createdAt: Date = Date()
     /// Роль в разборе: обычный скриншот, «до входа» или «после закрытия».

@@ -71,9 +71,6 @@ struct StatisticsView: View {
                         .foregroundStyle(Theme.textSecondary)
                         .reveal(.blur, 1)
 
-                    analyticsGrid
-                        .reveal(.zoom, 2)
-
                     if summary.closedCount == 0 {
                         emptyCard
                     } else {
@@ -175,113 +172,114 @@ struct StatisticsView: View {
                 SectionLabel(text: "Результат")
                 ScreenTitle(text: "Статистика")
             }
+
             Spacer(minLength: 4)
-            HStack(spacing: 5) {
-                Button {
-                    showAchievements = true
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "trophy")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
 
-                Button {
-                    showLossReview = true
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "arrow.down.right.circle")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    showErrors = true
-                    Haptics.tap()
-                } label: {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "exclamationmark.bubble")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.textSecondary)
-                            .frame(width: 30, height: 30)
-                            .glassCircle()
-                            .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-
-                        if awaitingErrors > 0 {
-                            Text("\(awaitingErrors)")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 15, height: 15)
-                                .background(Circle().fill(Theme.orange))
-                                .offset(x: 3, y: -3)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    showJournal = true
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "book.closed")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    showCompare = true
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "rectangle.split.2x1")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    showGoal = true
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "target")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    showReport = true
-                    Haptics.tap()
-                } label: {
-                    Image(systemName: "doc.text")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .glassCircle()
-                        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.top, 2)
+            headerMenu
+                .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var headerMenu: some View {
+        Menu {
+            Button {
+                showMonthlyPerformance = true
+                Haptics.tap()
+            } label: {
+                Label("Monthly Review", systemImage: "calendar.badge.clock")
+            }
+
+            Button {
+                showWeeklyPerformance = true
+                Haptics.tap()
+            } label: {
+                Label("Разбор недели", systemImage: "chart.bar.doc.horizontal")
+            }
+
+            Button {
+                showMarketBehavior = true
+                Haptics.tap()
+            } label: {
+                Label("Market Behavior", systemImage: "waveform.path.ecg")
+            }
+
+            Button {
+                showAlgorithmMonitor = true
+                Haptics.tap()
+            } label: {
+                Label("Algorithm Monitor", systemImage: "chart.line.uptrend.xyaxis")
+            }
+
+            Button {
+                showCompare = true
+                Haptics.tap()
+            } label: {
+                Label("Сравнить сделки", systemImage: "rectangle.split.2x1")
+            }
+
+            Button {
+                showReport = true
+                Haptics.tap()
+            } label: {
+                Label("Отчёт PDF", systemImage: "doc.text")
+            }
+
+            Divider()
+
+            Button {
+                showErrors = true
+                Haptics.tap()
+            } label: {
+                Label("Ошибки", systemImage: "exclamationmark.bubble")
+            }
+
+            Button {
+                showLossReview = true
+                Haptics.tap()
+            } label: {
+                Label("Разборы убытков", systemImage: "arrow.down.right.circle")
+            }
+
+            Button {
+                showJournal = true
+                Haptics.tap()
+            } label: {
+                Label("Дневник", systemImage: "book.closed")
+            }
+
+            Button {
+                showAchievements = true
+                Haptics.tap()
+            } label: {
+                Label("Достижения", systemImage: "trophy")
+            }
+
+            Button {
+                showGoal = true
+                Haptics.tap()
+            } label: {
+                Label("Цели", systemImage: "target")
+            }
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 36, height: 36)
+                    .glassCircle()
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+
+                if awaitingErrors > 0 {
+                    Text("\(awaitingErrors)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 15, height: 15)
+                        .background(Circle().fill(Theme.orange))
+                        .offset(x: 3, y: -3)
+                }
+            }
+        }
     }
 
     private var awaitingErrors: Int {
@@ -290,65 +288,6 @@ struct StatisticsView: View {
 
     private var caption: String {
         "\(Fmt.deals(summary.totalCount)) · \(summary.closedCount) закрыто"
-    }
-
-    // MARK: - Market behavior
-
-    @ViewBuilder
-    private var analyticsGrid: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 8) {
-                analyticsTiles
-            }
-        } else {
-            analyticsTiles
-        }
-    }
-
-    private var analyticsTiles: some View {
-        LazyVGrid(
-            columns: [
-                GridItem(.flexible(), spacing: 8),
-                GridItem(.flexible(), spacing: 8)
-            ],
-            spacing: 8
-        ) {
-            SectionTile(
-                title: "Market Behavior",
-                subtitle: "Структура, сессии, дни, POI",
-                icon: "waveform.path.ecg"
-            ) {
-                showMarketBehavior = true
-                Haptics.tap()
-            }
-
-            SectionTile(
-                title: "Algorithm Monitor",
-                subtitle: "Скользящие метрики и сигнал",
-                icon: "chart.line.uptrend.xyaxis"
-            ) {
-                showAlgorithmMonitor = true
-                Haptics.tap()
-            }
-
-            SectionTile(
-                title: "Monthly Review",
-                subtitle: "Разбор месяца в стиле AlexxxFX",
-                icon: "calendar.badge.clock"
-            ) {
-                showMonthlyPerformance = true
-                Haptics.tap()
-            }
-
-            SectionTile(
-                title: "Отчёт PDF",
-                subtitle: "Итоги за период",
-                icon: "doc.text"
-            ) {
-                showReport = true
-                Haptics.tap()
-            }
-        }
     }
 
     // MARK: - Tiles

@@ -10,9 +10,37 @@ import SwiftUI
 struct PressableButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.965 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
-            .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .rotation3DEffect(
+                .degrees(configuration.isPressed ? 2 : 0),
+                axis: (x: 1, y: 0, z: 0),
+                perspective: 0.4
+            )
+            .brightness(configuration.isPressed ? 0.04 : 0)
+            .animation(.spring(response: 0.42, dampingFraction: 0.86), value: configuration.isPressed)
+    }
+}
+
+/// Карточки и плитки: при нажатии уходят в глубину и поворачиваются.
+struct TiltButtonStyle: ButtonStyle {
+    var maxAngle: Double = 4
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .rotation3DEffect(
+                .degrees(configuration.isPressed ? maxAngle : 0),
+                axis: (x: 1, y: 0.35, z: 0),
+                perspective: 0.55
+            )
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .brightness(configuration.isPressed ? 0.04 : 0)
+            .shadow(
+                color: .black.opacity(configuration.isPressed ? 0.5 : 0.25),
+                radius: configuration.isPressed ? 8 : 14,
+                x: 0,
+                y: configuration.isPressed ? 3 : 9
+            )
+            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: configuration.isPressed)
     }
 }
 
@@ -56,6 +84,7 @@ struct PrimaryButton: View {
         .foregroundStyle(Theme.background)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 13)
+        .buttonAssembly(delay: 0.25)
     }
 }
 
@@ -72,6 +101,7 @@ struct SecondaryButton: View {
                     .foregroundStyle(Theme.textPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
+                    .buttonAssembly(delay: 0.2)
             }
             .buttonStyle(.glass)
         } else {
@@ -82,6 +112,7 @@ struct SecondaryButton: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .glassPanel(cornerRadius: 14)
+                    .buttonAssembly(delay: 0.2)
             }
             .buttonStyle(PressableButtonStyle())
         }
@@ -161,6 +192,7 @@ struct Chip: View {
             .foregroundStyle(isSelected ? Theme.background : Theme.textSecondary)
             .padding(.horizontal, 11)
             .padding(.vertical, 6)
+            .buttonAssembly(delay: 0.15)
     }
 }
 
@@ -359,16 +391,19 @@ struct MetricTile: View {
                 .tracking(1)
                 .foregroundStyle(Theme.textTertiary)
                 .lineLimit(1)
-            Text(value)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
+                .pieceIn(delay: 0.3)
+            NumericText(
+                text: value,
+                font: .system(size: 15, weight: .semibold, design: .rounded),
+                tint: tint
+            )
+            .pieceIn(delay: 0.55)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(9)
         .glassPanel(cornerRadius: 12)
+        .shadow(color: .black.opacity(0.22), radius: 8, x: 0, y: 5)
+        .specularSweep(cornerRadius: 12, delay: 0.9)
     }
 }
 
@@ -440,12 +475,12 @@ struct SummaryTable: View {
                         .font(.system(size: 12.5))
                         .foregroundStyle(Theme.textSecondary)
                     Spacer(minLength: 8)
-                    Text(item.value)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(item.tint)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                    NumericText(
+                        text: item.value,
+                        font: .system(size: 14, weight: .semibold, design: .rounded),
+                        tint: item.tint
+                    )
+                    .minimumScaleFactor(0.7)
                 }
                 .padding(.vertical, 8)
             }
@@ -578,6 +613,7 @@ struct SectionTile: View {
                         Image(systemName: icon)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(tint)
+                            .iconPop(delay: 0.25)
                     }
 
                     Spacer(minLength: 4)
@@ -589,10 +625,12 @@ struct SectionTile: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                             .background(Capsule().fill(tint))
+                            .pieceIn(delay: 0.35)
                     } else {
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Theme.textTertiary)
+                            .pieceIn(delay: 0.35)
                     }
                 }
 
@@ -602,6 +640,7 @@ struct SectionTile: View {
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .pieceIn(delay: 0.6)
 
                 if !subtitle.isEmpty {
                     Text(subtitle)
@@ -610,6 +649,7 @@ struct SectionTile: View {
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
+                        .pieceIn(delay: 0.85)
                 }
 
                 Spacer(minLength: 0)
@@ -617,9 +657,10 @@ struct SectionTile: View {
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
             .padding(12)
             .glassCard(cornerRadius: 20, interactive: true)
+            .specularSweep(cornerRadius: 20, delay: 0.8)
             .contentShape(Rectangle())
         }
-        .buttonStyle(PressableButtonStyle())
+        .buttonStyle(TiltButtonStyle())
     }
 }
 

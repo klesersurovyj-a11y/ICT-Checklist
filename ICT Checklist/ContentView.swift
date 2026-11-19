@@ -14,11 +14,13 @@ struct ContentView: View {
 
     @Query private var existingTrades: [Trade]
     @Query private var existingPlans: [TradePlan]
+    @Query private var settingsList: [AppSettings]
 
     @AppStorage("onboarding.completed") private var onboardingCompleted = false
 
     @State private var selection = 0
     @State private var revealTick = 0
+    @State private var showLaunch = true
     @State private var showGoal = false
     @State private var showWeekPlan = false
     @State private var showOnboarding = false
@@ -26,23 +28,37 @@ struct ContentView: View {
     var body: some View {
         TabView(selection: $selection) {
             TodayView()
+                .tabEntrance()
                 .tabItem { Label("Сегодня", systemImage: "checklist") }
                 .tag(0)
             TradesView()
+                .tabEntrance()
                 .tabItem { Label("Сделки", systemImage: "list.bullet.rectangle") }
                 .tag(1)
             StatisticsView()
+                .tabEntrance()
                 .tabItem { Label("Статистика", systemImage: "chart.bar.xaxis") }
                 .tag(2)
-            CalendarView()
-                .tabItem { Label("Календарь", systemImage: "calendar") }
-                .tag(3)
             MoreView()
+                .tabEntrance()
                 .tabItem { Label("Ещё", systemImage: "square.grid.2x2") }
-                .tag(4)
+                .tag(3)
         }
         .tint(Theme.accent)
         .preferredColorScheme(.dark)
+        .overlay {
+            if showLaunch {
+                LaunchMark()
+                    .transition(.opacity)
+                    .zIndex(60)
+            }
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: 1_300_000_000)
+            withAnimation(.easeOut(duration: 0.5)) {
+                showLaunch = false
+            }
+        }
         .environment(\.revealTick, revealTick)
         .onChange(of: selection) { _, _ in
             revealTick += 1
@@ -109,7 +125,9 @@ struct ContentView: View {
             JournalReminder.refresh(context: context)
             DailyLimitReminder.check(context: context)
             WeekPlanReminder.refresh(context: context)
+            TradeReviewReminder.refresh(context: context)
             CycleActivityController.shared.sync(context: context)
+            PlaybookEngine.seedIfNeeded(context: context, settings: settingsList.first)
         }
     }
 }
@@ -141,7 +159,9 @@ struct ContentView: View {
                 WeekScenario.self,
                 SystemBlueprint.self,
                 TraderProfile.self,
-                AssistantMessage.self
+                TrainingRun.self,
+                AssistantMessage.self,
+                PlaybookSetup.self
             ],
             inMemory: true
         )

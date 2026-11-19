@@ -111,7 +111,7 @@ final class PriceBook: ObservableObject {
     }
 
     /// EURUSD → EUR/USD, XAUUSD → XAU/USD, BTCUSD → BTC/USD.
-    static func apiSymbol(for symbol: String) -> String {
+    nonisolated static func apiSymbol(for symbol: String) -> String {
         let value = symbol
             .uppercased()
             .replacingOccurrences(of: "/", with: "")
@@ -252,6 +252,7 @@ enum PriceMonitor {
 
         try? context.save()
         LadderEngine.sync(context: context)
+        TradeReviewReminder.schedule(for: trade, context: context)
         GoalReminder.check(context: context)
         DailyLimitReminder.check(context: context)
 

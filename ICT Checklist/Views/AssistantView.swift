@@ -18,6 +18,8 @@ struct AssistantView: View {
 
     @AppStorage("assistant.lastCost") private var lastCost: Double = 0
     @AppStorage("assistant.lastCostProvider") private var lastCostProvider = ""
+    /// Собственный ассистент работает без ключей; внешняя модель — по желанию.
+    @AppStorage("assistant.useLocal") private var useLocal = true
 
     @State private var input = ""
     @State private var isThinking = false
@@ -36,7 +38,9 @@ struct AssistantView: View {
     private let quickPrompts = [
         "Разбери мои последние сделки",
         "Где я нарушаю систему",
+        "Помоги скорректировать систему",
         "Что исправить в риск-менеджменте",
+        "Что с валютой: три банка и потоки",
         "Собери план на неделю"
     ]
 
@@ -62,9 +66,13 @@ struct AssistantView: View {
                         topBar
                             .padding(.top, 8)
                         contextRow
-                        modelRow
+                        modeCard
 
-                        if !hasKey {
+                        if !useLocal {
+                            modelRow
+                        }
+
+                        if !useLocal && !hasKey {
                             keyCard
                         }
 
@@ -173,6 +181,36 @@ struct AssistantView: View {
         .foregroundStyle(Theme.textTertiary)
     }
 
+    private var modeCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $useLocal) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Собственный ассистент")
+                        .font(.system(size: 14.5, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(
+                        useLocal
+                            ? "Считает по вашей базе на устройстве — без ключей и интернета"
+                            : "Отвечает внешняя модель \(provider.title) · \(model)"
+                    )
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(.white)
+
+            if !useLocal {
+                Text("Для внешней модели нужен ключ \(provider.keyName) в настройках ключей.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .glassCard(cornerRadius: 18)
+    }
+
     private var modelRow: some View {
         HStack(spacing: 8) {
             Image(systemName: "cpu")
@@ -232,7 +270,7 @@ struct AssistantView: View {
                     .foregroundStyle(Theme.textPrimary)
             }
 
-            Text("Сделки, планы, риск-модель, конструктор системы и записи Second Brain. Разбирает по костяку TDA + Risk и стилю AlexxxFX / Mordan.")
+            Text("Собственный ассистент считает по вашим сделкам, планам, риску, ошибкам, заметкам и банковскому блоку прямо на устройстве — без ключей и интернета. Внешнюю модель можно включить переключателем выше.")
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -325,14 +363,32 @@ struct AssistantView: View {
                     )
             }
         } else {
-            Text(LocalizedStringKey(message.text))
-                .font(.system(size: 14))
-                .lineSpacing(3)
-                .foregroundStyle(Theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassCard(cornerRadius: 18)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(LocalizedStringKey(message.text))
+                    .font(.system(size: 14))
+                    .lineSpacing(3)
+                    .foregroundStyle(Theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    saveToBrain(message.text)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("В Second Brain")
+                            .font(.system(size: 11.5, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.white.opacity(0.06)))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(cornerRadius: 18)
         }
     }
 
@@ -406,8 +462,26 @@ struct AssistantView: View {
         }
     }
 
-    private func refreshContext() {
-        refreshKey()
+    private func saveToBrain(_ text: String) {
+        let note = BrainNote(
+            kind: .observation,
+            title: "Разбор ассистента · \(Fmt.shortDay(.now))"
+        )
+        note.summary = String(text.prefix(1200))
+        context.insert(note)
+
+        let question = messages.last(where: { $0.isUser })?.text ?? ""
+        let hypothesis = AdviceHypothesis(
+            question: question,
+            answer: String(text.prefix(1200))
+        )
+        context.insert(hypothesis)
+
+        try? context.save()
+        Haptics.success()
+    }
+
+    private func refreshContext() {        refreshKey()
         let snapshot = AssistantContext.build(context: context)
         snapshotText = snapshot.text
         tradeCount = snapshot.tradeCount
@@ -428,6 +502,22 @@ struct AssistantView: View {
         let prompt = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty, !isThinking else { return }
 
+        if useLocal {
+            context.insert(AssistantMessage(role: "user", text: prompt))
+            try? context.save()
+
+            input = ""
+            errorText = nil
+            isThinking = true
+            let reply = AssistantLocal.answer(to: prompt, context: context)
+            context.insert(AssistantMessage(role: "assistant", text: reply))
+            try? context.save()
+
+            isThinking = false
+            Haptics.success()
+            return
+        }
+
         refreshKey()
 
         guard hasKey else {
@@ -437,7 +527,7 @@ struct AssistantView: View {
         }
 
         let history = messages.suffix(12).map { AssistantTurn(role: $0.role, text: $0.text) }
-        let systemMessage = StyleKnowledge.systemPrompt + "\n\n" + snapshotText
+        let systemMessage = AssistantBrain.systemPrompt + "\n\n" + snapshotText
 
         context.insert(AssistantMessage(role: "user", text: prompt))
         try? context.save()

@@ -18,8 +18,7 @@ struct ICT_ChecklistApp: App {
     }
 }
 
-/// The app's single store. It is mirrored to iCloud when that is available,
-/// and always stays usable from the local database when it is not.
+/// The app's single store. Everything stays on this device; there is no cloud sync.
 enum AppContainer {
     static let schema = Schema([
         TradingCycle.self,
@@ -45,22 +44,17 @@ enum AppContainer {
         WeekScenario.self,
         SystemBlueprint.self,
         TraderProfile.self,
-        AssistantMessage.self
+        TrainingRun.self,
+        AssistantMessage.self,
+        PlaybookSetup.self,
+        BankRateRevision.self,
+        AdviceHypothesis.self,
+        FundMandate.self,
+        CommitteeProtocol.self,
+        SystemVersion.self
     ])
 
     static let shared: ModelContainer = {
-        if CloudAvailability.hasICloudEntitlement {
-            let cloudConfiguration = ModelConfiguration(
-                schema: schema,
-                isStoredInMemoryOnly: false,
-                cloudKitDatabase: .automatic
-            )
-
-            if let container = try? ModelContainer(for: schema, configurations: [cloudConfiguration]) {
-                return container
-            }
-        }
-
         let localConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false,

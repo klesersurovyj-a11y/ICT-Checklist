@@ -35,6 +35,7 @@ struct StepRailView: View {
                 }
             }
         }
+        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentGroup)
     }
 
     private func node(_ group: StepGroup) -> some View {

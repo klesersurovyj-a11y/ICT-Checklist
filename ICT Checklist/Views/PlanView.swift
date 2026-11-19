@@ -10,9 +10,18 @@ import UIKit
 
 struct PlanView: View {
     @Bindable var plan: TradePlan
+    var onClose: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
+        }
+    }
 
     @Query(sort: \Trade.entryDate, order: .reverse) private var allTrades: [Trade]
     @Query private var settingsList: [AppSettings]
@@ -132,7 +141,7 @@ struct PlanView: View {
         HStack(spacing: 10) {
             Button {
                 save()
-                dismiss()
+                close()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .bold))
@@ -640,7 +649,7 @@ struct PlanView: View {
         context.delete(plan)
         try? context.save()
         Haptics.warning()
-        dismiss()
+        close()
     }
 
     // MARK: - Saving

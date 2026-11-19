@@ -191,7 +191,7 @@ final class TradePlan {
     }
 }
 
-/// Скриншот плана. Хранится в базе и синхронизируется через iCloud.
+/// Скриншот плана. Хранится в базе на этом устройстве.
 @Model
 final class PlanPhoto {
     @Attribute(.externalStorage) var imageData: Data?
