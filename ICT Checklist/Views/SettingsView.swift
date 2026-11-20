@@ -48,7 +48,7 @@ private struct SettingsContent: View {
     @Environment(\.modelContext) private var context
 
     @Query(sort: \Trade.entryDate) private var trades: [Trade]
-    @Query(sort: \TradingCycle.day) private var cycles: [TradingCycle]
+    @Query(sort: \TradingCycle.createdAt) private var cycles: [TradingCycle]
     @Query(sort: \TradingAccount.createdAt) private var accounts: [TradingAccount]
     @Query private var errorNotes: [ErrorNote]
     @Query private var brainNotes: [BrainNote]
@@ -93,51 +93,29 @@ private struct SettingsContent: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
                 header
-                    .reveal(.drop)
                 systemCard
-                    .reveal(.slideLeft, 1)
                 profilesCard
-                    .reveal(.slideLeft, 1)
                 assistantCard
-                    .reveal(.slideLeft, 1)
                 marketBehaviorCard
-                    .reveal(.slideLeft, 1)
                 algorithmMonitorCard
-                    .reveal(.slideLeft, 1)
                 riskIntelligenceCard
-                    .reveal(.slideLeft, 1)
                 symbolsCard
-                    .reveal(.slideLeft, 1)
                 timeCard
-                    .reveal(.slideLeft, 2)
                 reminderCard
-                    .reveal(.slideLeft, 3)
                 ladderCard
-                    .reveal(.slideLeft, 4)
                 dealCard
-                    .reveal(.slideLeft, 5)
                 dailyLimitsCard
-                    .reveal(.slideLeft, 6)
                 weeklyLimitsCard
-                    .reveal(.slideLeft, 6)
                 marketCard
-                    .reveal(.slideLeft, 7)
                 accountsCard
-                    .reveal(.slideLeft, 8)
                 dataCard
-                    .reveal(.slideLeft, 9)
                 backupCard
-                    .reveal(.slideLeft, 10)
                 if demoCount > 0 {
                     demoCard
-                        .reveal(.slideLeft, 10)
                 }
                 securityCard
-                    .reveal(.slideLeft, 11)
                 syncCard
-                    .reveal(.blur, 11)
                 footer
-                    .reveal(.rise, 12)
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -1788,7 +1766,10 @@ private struct SettingsContent: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .glassCard(cornerRadius: 24)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.045))
+        )
     }
 
     // MARK: - Actions
