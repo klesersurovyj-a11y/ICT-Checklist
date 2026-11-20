@@ -163,27 +163,45 @@ enum CommitteeAgenda {
 
         // 6. Отклонения в атрибуции по сетапам.
         let monthStart = calendar.date(byAdding: .day, value: -30, to: now) ?? now
-        let recent = trades.filter {
-            $0.result != .open && ($0.closedAt ?? $0.tradingDay) >= monthStart
+        var recent: [Trade] = []
+        for trade in trades {
+            guard trade.result != .open else { continue }
+            let date = trade.closedAt ?? trade.tradingDay
+            if date >= monthStart {
+                recent.append(trade)
+            }
         }
-        let bySetup = Dictionary(grouping: recent.filter { !$0.setupName.isEmpty }, by: \.setupName)
-        if let worst = bySetup
-            .map({ name, list in (name, list.count, list.reduce(0) { $0 + $1.actualR }) })
-            .filter({ $0.1 >= 3 && $0.2 < -0.05 })
-            .min(by: { $0.2 < $1.2 }) {
-            items.append(
-                CommitteeItem(
-                    id: "setup-\(worst.0)",
-                    title: "Вклад сетапа «\(worst.0)» упал до \(Fmt.r(worst.2))",
-                    detail: "Атрибуция · \(Fmt.deals(worst.1)) за 30 дней",
-                    level: .watch,
-                    target: .trades,
-                    subject: "вес сетапа «\(worst.0)»"
-                )
-            )
+        if let item = setupDeviation(recent) {
+            items.append(item)
         }
 
         return items
+    }
+
+    private static func setupDeviation(_ trades: [Trade]) -> CommitteeItem? {
+        let grouped = Dictionary(grouping: trades, by: { $0.setupName })
+        var candidates: [(name: String, count: Int, r: Double)] = []
+        for (name, list) in grouped where !name.isEmpty {
+            var total = 0.0
+            for trade in list {
+                total += trade.actualR
+            }
+            candidates.append((name: name, count: list.count, r: total))
+        }
+
+        let weak = candidates.filter { candidate in
+            candidate.count >= 3 && candidate.r < -0.05
+        }
+        guard let worst = weak.min(by: { $0.r < $1.r }) else { return nil }
+
+        return CommitteeItem(
+            id: "setup-\(worst.name)",
+            title: "Вклад сетапа «\(worst.name)» упал до \(Fmt.r(worst.r))",
+            detail: "Атрибуция · \(Fmt.deals(worst.count)) за 30 дней",
+            level: .watch,
+            target: .trades,
+            subject: "вес сетапа «\(worst.name)»"
+        )
     }
 
     private static func stressWeeks(_ days: Int) -> String {
